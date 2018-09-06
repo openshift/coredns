@@ -18,5 +18,5 @@ ENTRYPOINT ["/usr/bin/coredns"]
 USER 1001
 
 LABEL io.k8s.display-name="CoreDNS" \
-      io.k8s.description="CoreDNS is a DNS server that chains plugins" \
-      maintainer="coredns-discuss@googlegroups.com"
+      io.k8s.description="CoreDNS delivers the DNS and Discovery Service for a Kubernetes cluster." \
+      maintainer="aos-devel@redhat.com"
