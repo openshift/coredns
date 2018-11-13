@@ -1,0 +1,13 @@
+FROM registry.svc.ci.openshift.org/openshift/release:golang-1.10 AS builder
+WORKDIR /go/src/github.com/coredns/coredns
+COPY . .
+RUN go build -o coredns .
+
+FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
+COPY --from=builder /go/src/github.com/coredns/coredns/coredns /usr/bin/coredns
+
+ENTRYPOINT ["/usr/bin/coredns"]
+
+LABEL io.k8s.display-name="CoreDNS" \
+      io.k8s.description="CoreDNS delivers the DNS and Discovery Service for a Kubernetes cluster." \
+      maintainer="dev@lists.openshift.redhat.com"
