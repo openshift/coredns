@@ -4,7 +4,7 @@ COPY . .
 RUN go build -o coredns .
 
 FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base
-COPY --from=builder /go/src/github.com/coredns/coredns/coredns /usr/bin/coredns
+COPY --from=builder /go/src/github.com/coredns/coredns/coredns /usr/bin/
 
 ENTRYPOINT ["/usr/bin/coredns"]
 
