@@ -7,8 +7,12 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
-	"github.com/miekg/dns"
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	"github.com/coredns/coredns/plugin/pkg/doh"
+	"github.com/coredns/coredns/plugin/pkg/response"
+	"github.com/coredns/coredns/plugin/pkg/transport"
 )
 
 // ServerHTTPS represents an instance of a DNS-over-HTTPS server.
@@ -57,7 +61,7 @@ func (s *ServerHTTPS) ServePacket(p net.PacketConn) error { return nil }
 // Listen implements caddy.TCPServer interface.
 func (s *ServerHTTPS) Listen() (net.Listener, error) {
 
-	l, err := net.Listen("tcp", s.Addr[len(TransportHTTPS+"://"):])
+	l, err := net.Listen("tcp", s.Addr[len(transport.HTTPS+"://"):])
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +78,7 @@ func (s *ServerHTTPS) OnStartupComplete() {
 		return
 	}
 
-	out := startUpZones(TransportHTTPS+"://", s.Addr, s.zones)
+	out := startUpZones(transport.HTTPS+"://", s.Addr, s.zones)
 	if out != "" {
 		fmt.Print(out)
 	}
@@ -95,24 +99,12 @@ func (s *ServerHTTPS) Stop() error {
 // chain, converts it back and write it to the client.
 func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	msg := new(dns.Msg)
-	var err error
-
-	if r.URL.Path != pathDOH {
+	if r.URL.Path != doh.Path {
 		http.Error(w, "", http.StatusNotFound)
 		return
 	}
 
-	switch r.Method {
-	case http.MethodPost:
-		msg, err = postRequestToMsg(r)
-	case http.MethodGet:
-		msg, err = getRequestToMsg(r)
-	default:
-		http.Error(w, "", http.StatusMethodNotAllowed)
-		return
-	}
-
+	msg, err := doh.RequestToMsg(r)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -129,8 +121,11 @@ func (s *ServerHTTPS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	buf, _ := dw.Msg.Pack()
 
-	w.Header().Set("Content-Type", mimeTypeDOH)
-	w.Header().Set("Cache-Control", "max-age=128") // TODO(issues/1823): implement proper fix.
+	mt, _ := response.Typify(dw.Msg, time.Now().UTC())
+	age := dnsutil.MinimalTTL(dw.Msg, mt)
+
+	w.Header().Set("Content-Type", doh.MimeType)
+	w.Header().Set("Cache-Control", fmt.Sprintf("max-age=%f", age.Seconds()))
 	w.Header().Set("Content-Length", strconv.Itoa(len(buf)))
 	w.WriteHeader(http.StatusOK)
 

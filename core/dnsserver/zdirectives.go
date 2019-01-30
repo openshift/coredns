@@ -10,6 +10,7 @@ package dnsserver
 // (after) them during a request, but they must not
 // care what plugin above them are doing.
 var Directives = []string{
+	"metadata",
 	"tls",
 	"reload",
 	"nsid",
@@ -29,16 +30,17 @@ var Directives = []string{
 	"rewrite",
 	"dnssec",
 	"autopath",
-	"reverse",
 	"template",
 	"hosts",
 	"route53",
 	"federation",
+	"k8s_external",
 	"kubernetes",
 	"file",
 	"auto",
 	"secondary",
 	"etcd",
+	"loop",
 	"forward",
 	"proxy",
 	"erratic",

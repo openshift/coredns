@@ -7,8 +7,10 @@ import (
 	"testing"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metadata"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
+	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 )
@@ -29,8 +31,8 @@ func TestNewRule(t *testing.T) {
 		{[]string{"name"}, true, nil},
 		{[]string{"name", "a.com"}, true, nil},
 		{[]string{"name", "a.com", "b.com", "c.com"}, true, nil},
-		{[]string{"name", "a.com", "b.com"}, false, reflect.TypeOf(&nameRule{})},
-		{[]string{"name", "exact", "a.com", "b.com"}, false, reflect.TypeOf(&nameRule{})},
+		{[]string{"name", "a.com", "b.com"}, false, reflect.TypeOf(&exactNameRule{})},
+		{[]string{"name", "exact", "a.com", "b.com"}, false, reflect.TypeOf(&exactNameRule{})},
 		{[]string{"name", "prefix", "a.com", "b.com"}, false, reflect.TypeOf(&prefixNameRule{})},
 		{[]string{"name", "suffix", "a.com", "b.com"}, false, reflect.TypeOf(&suffixNameRule{})},
 		{[]string{"name", "substring", "a.com", "b.com"}, false, reflect.TypeOf(&substringNameRule{})},
@@ -103,8 +105,8 @@ func TestNewRule(t *testing.T) {
 		{[]string{"edns0", "subnet", "append", "24", "56"}, false, reflect.TypeOf(&edns0SubnetRule{})},
 		{[]string{"edns0", "subnet", "replace", "24", "56"}, false, reflect.TypeOf(&edns0SubnetRule{})},
 		{[]string{"unknown-action", "name", "a.com", "b.com"}, true, nil},
-		{[]string{"stop", "name", "a.com", "b.com"}, false, reflect.TypeOf(&nameRule{})},
-		{[]string{"continue", "name", "a.com", "b.com"}, false, reflect.TypeOf(&nameRule{})},
+		{[]string{"stop", "name", "a.com", "b.com"}, false, reflect.TypeOf(&exactNameRule{})},
+		{[]string{"continue", "name", "a.com", "b.com"}, false, reflect.TypeOf(&exactNameRule{})},
 		{[]string{"unknown-action", "type", "any", "a"}, true, nil},
 		{[]string{"stop", "type", "any", "a"}, false, reflect.TypeOf(&typeRule{})},
 		{[]string{"continue", "type", "any", "a"}, false, reflect.TypeOf(&typeRule{})},
@@ -434,10 +436,30 @@ func optsEqual(a, b []dns.EDNS0) bool {
 	return true
 }
 
+type testProvider map[string]metadata.Func
+
+func (tp testProvider) Metadata(ctx context.Context, state request.Request) context.Context {
+	for k, v := range tp {
+		metadata.SetValueFunc(ctx, k, v)
+	}
+	return ctx
+}
+
 func TestRewriteEDNS0LocalVariable(t *testing.T) {
 	rw := Rewrite{
 		Next:     plugin.HandlerFunc(msgPrinter),
 		noRevert: true,
+	}
+
+	expectedMetadata := []metadata.Provider{
+		testProvider{"test/label": func() string { return "my-value" }},
+		testProvider{"test/empty": func() string { return "" }},
+	}
+
+	meta := metadata.Metadata{
+		Zones:     []string{"."},
+		Providers: expectedMetadata,
+		Next:      &rw,
 	}
 
 	// test.ResponseWriter has the following values:
@@ -482,23 +504,39 @@ func TestRewriteEDNS0LocalVariable(t *testing.T) {
 		},
 		{
 			[]dns.EDNS0{},
+			[]string{"local", "set", "0xffee", "{server_port}"},
+			[]dns.EDNS0{&dns.EDNS0_LOCAL{Code: 0xffee, Data: []byte{0x00, 0x35}}},
+			true,
+		},
+		{
+			[]dns.EDNS0{},
 			[]string{"local", "set", "0xffee", "{server_ip}"},
 			[]dns.EDNS0{&dns.EDNS0_LOCAL{Code: 0xffee, Data: []byte{0x7F, 0x00, 0x00, 0x01}}},
 			true,
 		},
 		{
 			[]dns.EDNS0{},
-			[]string{"local", "set", "0xffee", "{server_port}"},
-			[]dns.EDNS0{&dns.EDNS0_LOCAL{Code: 0xffee, Data: []byte{0x00, 0x35}}},
+			[]string{"local", "set", "0xffee", "{test/label}"},
+			[]dns.EDNS0{&dns.EDNS0_LOCAL{Code: 0xffee, Data: []byte("my-value")}},
 			true,
+		},
+		{
+			[]dns.EDNS0{},
+			[]string{"local", "set", "0xffee", "{test/empty}"},
+			nil,
+			false,
+		},
+		{
+			[]dns.EDNS0{},
+			[]string{"local", "set", "0xffee", "{test/does-not-exist}"},
+			nil,
+			false,
 		},
 	}
 
-	ctx := context.TODO()
 	for i, tc := range tests {
 		m := new(dns.Msg)
 		m.SetQuestion("example.com.", dns.TypeA)
-		m.Question[0].Qclass = dns.ClassINET
 
 		r, err := newEdns0Rule("stop", tc.args...)
 		if err != nil {
@@ -507,16 +545,19 @@ func TestRewriteEDNS0LocalVariable(t *testing.T) {
 		}
 		rw.Rules = []Rule{r}
 
+		ctx := context.TODO()
 		rec := dnstest.NewRecorder(&test.ResponseWriter{})
-		rw.ServeDNS(ctx, rec, m)
+		meta.ServeDNS(ctx, rec, m)
 
 		resp := rec.Msg
 		o := resp.IsEdns0()
-		o.SetDo(tc.doBool)
 		if o == nil {
-			t.Errorf("Test %d: EDNS0 options not set", i)
+			if tc.toOpts != nil {
+				t.Errorf("Test %d: EDNS0 options not set", i)
+			}
 			continue
 		}
+		o.SetDo(tc.doBool)
 		if o.Do() != tc.doBool {
 			t.Errorf("Test %d: Expected %v but got %v", i, tc.doBool, o.Do())
 		}
@@ -620,7 +661,6 @@ func TestRewriteEDNS0Subnet(t *testing.T) {
 	for i, tc := range tests {
 		m := new(dns.Msg)
 		m.SetQuestion("example.com.", dns.TypeA)
-		m.Question[0].Qclass = dns.ClassINET
 
 		r, err := newEdns0Rule("stop", tc.args...)
 		if err != nil {

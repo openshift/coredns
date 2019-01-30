@@ -12,6 +12,10 @@ func isDefaultNS(name, zone string) bool {
 	return strings.Index(name, defaultNSName) == 0 && strings.Index(name, zone) == len(defaultNSName)
 }
 
+// nsAddr return the A record for the CoreDNS service in the cluster. If it fails that it fallsback
+// on the local address of the machine we're running on.
+//
+// This function is rather expensive to run.
 func (k *Kubernetes) nsAddr() *dns.A {
 	var (
 		svcName      string
@@ -27,8 +31,8 @@ FindEndpoint:
 		for _, eps := range ep.Subsets {
 			for _, addr := range eps.Addresses {
 				if localIP.Equal(net.ParseIP(addr.IP)) {
-					svcNamespace = ep.ObjectMeta.Namespace
-					svcName = ep.ObjectMeta.Name
+					svcNamespace = ep.Namespace
+					svcName = ep.Name
 					break FindEndpoint
 				}
 			}
@@ -44,10 +48,10 @@ FindEndpoint:
 FindService:
 	for _, svc := range k.APIConn.ServiceList() {
 		if svcName == svc.Name && svcNamespace == svc.Namespace {
-			if svc.Spec.ClusterIP == api.ClusterIPNone {
+			if svc.ClusterIP == api.ClusterIPNone {
 				rr.A = localIP
 			} else {
-				rr.A = net.ParseIP(svc.Spec.ClusterIP)
+				rr.A = net.ParseIP(svc.ClusterIP)
 			}
 			break FindService
 		}

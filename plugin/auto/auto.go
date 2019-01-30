@@ -31,9 +31,9 @@ type (
 		re        *regexp.Regexp
 
 		// In the future this should be something like ZoneMeta that contains all this stuff.
-		transferTo []string
-		noReload   bool
-		upstream   upstream.Upstream // Upstream for looking up names during the resolution process.
+		transferTo     []string
+		ReloadInterval time.Duration
+		upstream       upstream.Upstream // Upstream for looking up names during the resolution process.
 
 		duration time.Duration
 	}
@@ -70,7 +70,7 @@ func (a Auto) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 
 	m := new(dns.Msg)
 	m.SetReply(r)
-	m.Authoritative, m.RecursionAvailable = true, true
+	m.Authoritative = true
 	m.Answer, m.Ns, m.Extra = answer, ns, extra
 
 	switch result {
@@ -84,8 +84,6 @@ func (a Auto) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 		return dns.RcodeServerFailure, nil
 	}
 
-	state.SizeAndDo(m)
-	m, _ = state.Scrub(m)
 	w.WriteMsg(m)
 	return dns.RcodeSuccess, nil
 }

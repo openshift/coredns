@@ -17,7 +17,7 @@ func TestCached(t *testing.T) {
 	})
 	defer s.Close()
 
-	tr := newTransport(s.Addr, nil /* no TLS */)
+	tr := newTransport(s.Addr)
 	tr.Start()
 	defer tr.Stop()
 
@@ -56,7 +56,7 @@ func TestCleanupByTimer(t *testing.T) {
 	})
 	defer s.Close()
 
-	tr := newTransport(s.Addr, nil /* no TLS */)
+	tr := newTransport(s.Addr)
 	tr.SetExpire(100 * time.Millisecond)
 	tr.Start()
 	defer tr.Stop()
@@ -90,7 +90,7 @@ func TestPartialCleanup(t *testing.T) {
 	})
 	defer s.Close()
 
-	tr := newTransport(s.Addr, nil /* no TLS */)
+	tr := newTransport(s.Addr)
 	tr.SetExpire(100 * time.Millisecond)
 	tr.Start()
 	defer tr.Stop()
@@ -138,11 +138,11 @@ func TestCleanupAll(t *testing.T) {
 	})
 	defer s.Close()
 
-	tr := newTransport(s.Addr, nil /* no TLS */)
+	tr := newTransport(s.Addr)
 
-	c1, _ := dns.DialTimeout("udp", tr.addr, dialTimeout)
-	c2, _ := dns.DialTimeout("udp", tr.addr, dialTimeout)
-	c3, _ := dns.DialTimeout("udp", tr.addr, dialTimeout)
+	c1, _ := dns.DialTimeout("udp", tr.addr, maxDialTimeout)
+	c2, _ := dns.DialTimeout("udp", tr.addr, maxDialTimeout)
+	c3, _ := dns.DialTimeout("udp", tr.addr, maxDialTimeout)
 
 	tr.conns["udp"] = []*persistConn{
 		{c1, time.Now()},

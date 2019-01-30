@@ -47,6 +47,7 @@ Extra knobs are available with an expanded syntax:
 forward FROM TO... {
     except IGNORED_NAMES...
     force_tcp
+    prefer_udp
     expire DURATION
     max_fails INTEGER
     tls CERT KEY CA
@@ -60,6 +61,9 @@ forward FROM TO... {
 * **IGNORED_NAMES** in `except` is a space-separated list of domains to exclude from forwarding.
   Requests that match none of these names will be passed through.
 * `force_tcp`, use TCP even when the request comes in over UDP.
+* `prefer_udp`, try first using UDP even when the request comes in over TCP. If response is truncated
+  (TC flag set in response) then do another attempt over TCP. In case if both `force_tcp` and
+  `prefer_udp` options specified the `force_tcp` takes precedence.
 * `max_fails` is the number of subsequent failed health checks that are needed before considering
   an upstream to be down. If 0, the upstream will never be marked as down (nor health checked).
   Default is 2.
@@ -75,12 +79,19 @@ forward FROM TO... {
     The server certificate is verified using the specified CA file
 
 * `tls_servername` **NAME** allows you to set a server name in the TLS configuration; for instance 9.9.9.9
-  needs this to be set to `dns.quad9.net`.
+  needs this to be set to `dns.quad9.net`. Multiple upstreams are still allowed in this scenario,
+  but they have to use the same `tls_servername`. E.g. mixing 9.9.9.9 (QuadDNS) with 1.1.1.1
+  (Cloudflare) will not work.
 * `policy` specifies the policy to use for selecting upstream servers. The default is `random`.
 * `health_check`, use a different **DURATION** for health checking, the default duration is 0.5s.
 
 Also note the TLS config is "global" for the whole forwarding proxy if you need a different
 `tls-name` for different upstreams you're out of luck.
+
+On each endpoint, the timeouts of the communication are set by default and automatically tuned depending early results.
+
+* dialTimeout by default is 30 sec, and can decrease automatically down to 100ms
+* readTimeout by default is 2 sec, and can decrease automatically down to 200ms
 
 ## Metrics
 
@@ -145,6 +156,18 @@ service with health checks.
 . {
     forward . tls://9.9.9.9 {
        tls_servername dns.quad9.net
+       health_check 5s
+    }
+    cache 30
+}
+~~~
+
+Or with multiple upstreams from the same provider
+
+~~~ corefile
+. {
+    forward . tls://1.1.1.1 tls://1.0.0.1 {
+       tls_servername loudflare-dns.com
        health_check 5s
     }
     cache 30

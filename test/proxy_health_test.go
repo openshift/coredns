@@ -1,8 +1,6 @@
 package test
 
 import (
-	"io/ioutil"
-	"log"
 	"testing"
 
 	"github.com/coredns/coredns/plugin/proxy"
@@ -13,8 +11,6 @@ import (
 )
 
 func TestProxyErratic(t *testing.T) {
-	log.SetOutput(ioutil.Discard)
-
 	corefile := `example.org:0 {
 		erratic {
 			drop 2
@@ -39,8 +35,7 @@ func TestProxyErratic(t *testing.T) {
 
 func TestProxyThreeWay(t *testing.T) {
 	// Run 3 CoreDNS server, 2 upstream ones and a proxy. 1 Upstream is unhealthy after 1 query, but after
-	// that we should still be able to send to the other one
-	log.SetOutput(ioutil.Discard)
+	// that we should still be able to send to the other one.
 
 	// Backend CoreDNS's.
 	corefileUp1 := `example.org:0 {
@@ -102,7 +97,7 @@ func TestProxyThreeWay(t *testing.T) {
 			continue
 		}
 		// We would previously get SERVFAIL, so just getting answers here
-		// is a good sign. The actuall timeouts are handled in the err != nil case
+		// is a good sign. The actual timeouts are handled in the err != nil case
 		// above.
 		if r.Rcode != dns.RcodeSuccess {
 			t.Fatalf("Expected success rcode, got %d", r.Rcode)

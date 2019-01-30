@@ -34,7 +34,7 @@ type template struct {
 	qclass     uint16
 	qtype      uint16
 	fall       fall.F
-	upstream   upstream.Upstream
+	upstream   *upstream.Upstream
 }
 
 type templateData struct {
@@ -75,7 +75,7 @@ func (h Handler) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 		msg := new(dns.Msg)
 		msg.SetReply(r)
-		msg.Authoritative, msg.RecursionAvailable = true, true
+		msg.Authoritative = true
 		msg.Rcode = template.rcode
 
 		for _, answer := range template.answer {
@@ -84,8 +84,8 @@ func (h Handler) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 				return dns.RcodeServerFailure, err
 			}
 			msg.Answer = append(msg.Answer, rr)
-			if rr.Header().Rrtype == dns.TypeCNAME {
-				up, _ := template.upstream.Lookup(state, rr.(*dns.CNAME).Target, dns.TypeA)
+			if template.upstream != nil && (state.QType() == dns.TypeA || state.QType() == dns.TypeAAAA) && rr.Header().Rrtype == dns.TypeCNAME {
+				up, _ := template.upstream.Lookup(state, rr.(*dns.CNAME).Target, state.QType())
 				msg.Answer = append(msg.Answer, up.Answer...)
 			}
 		}
@@ -104,8 +104,6 @@ func (h Handler) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 			msg.Ns = append(msg.Ns, rr)
 		}
 
-		state.SizeAndDo(msg)
-		state.Scrub(msg)
 		w.WriteMsg(msg)
 		return template.rcode, nil
 	}

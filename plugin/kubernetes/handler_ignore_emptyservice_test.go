@@ -2,9 +2,10 @@ package kubernetes
 
 import (
 	"context"
+	"testing"
+
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/test"
-	"testing"
 
 	"github.com/miekg/dns"
 )
@@ -15,7 +16,7 @@ var dnsEmptyServiceTestCases = []test.Case{
 		Qname: "svcempty.testns.svc.cluster.local.", Qtype: dns.TypeA,
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
-			test.SOA("cluster.local.	300	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 60"),
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
 		},
 	},
 }

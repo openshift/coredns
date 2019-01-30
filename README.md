@@ -5,7 +5,6 @@
 [![Code Coverage](https://img.shields.io/codecov/c/github/coredns/coredns/master.svg)](https://codecov.io/github/coredns/coredns?branch=master)
 [![Docker Pulls](https://img.shields.io/docker/pulls/coredns/coredns.svg)](https://hub.docker.com/r/coredns/coredns)
 [![Go Report Card](https://goreportcard.com/badge/github.com/coredns/coredns)](https://goreportcard.com/report/coredns/coredns)
-[![FOSSA Status](https://app.fossa.io/api/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fcoredns%2Fcoredns.svg?type=shield)](https://app.fossa.io/projects/git%2Bhttps%3A%2F%2Fgithub.com%2Fcoredns%2Fcoredns?ref=badge_shield)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1250/badge)](https://bestpractices.coreinfrastructure.org/projects/1250)
 
 CoreDNS (written in Go) chains [plugins](https://coredns.io/plugins). Each plugin performs a DNS
@@ -33,7 +32,7 @@ Currently CoreDNS is able to:
 * Use k8s (kubernetes) as a backend (*kubernetes*).
 * Serve as a proxy to forward queries to some other (recursive) nameserver (*proxy*, and *forward*).
 * Provide metrics (by using Prometheus) (*metrics*).
-* Provide query (*log*) and error (*error*) logging.
+* Provide query (*log*) and error (*errors*) logging.
 * Support the CH class: `version.bind` and friends (*chaos*).
 * Support the RFC 5001 DNS name server identifier (NSID) option (*nsid*).
 * Profiling support (*pprof*).
@@ -45,15 +44,17 @@ out-of-tree plugins.
 
 ## Compilation from Source
 
-Check out the project and do dependency resolution with:
+Check out the project:
 
 ~~~
-% go get github.com/coredns/coredns
+% git clone https://github.com/coredns/coredns
 ~~~
 
-Some of the dependencies require Go version 1.9 or later.
+We vendor most (not all!) packages. This is mostly because vendoring isn't a perfect solution (in
+Go). We don't vendor `mholt/caddy` and `miekg/dns` for instance. Using `make` will pull down these
+dependencies and check out the correct version as well.
 
-We vendor most (not all!) packages. Building from scratch is easiest, by just using `make`:
+Next just run `make`:
 
 ~~~
 % make
@@ -68,7 +69,7 @@ a Go environment, you could build CoreDNS easily:
 
 ```
 $ docker run --rm -i -t -v $PWD:/go/src/github.com/coredns/coredns \
-      -w /go/src/github.com/coredns/coredns golang:1.10 make
+      -w /go/src/github.com/coredns/coredns golang:1.11 make
 ```
 
 The above command alone will have `coredns` binary generated.
@@ -175,26 +176,27 @@ When no transport protocol is specified the default `dns://` is assumed.
 
 ## Community
 
-We're most active on Slack (and Github):
+We're most active on Github (and Slack):
 
-- Slack: #coredns on <https://slack.cncf.io>
 - Github: <https://github.com/coredns/coredns>
+- Slack: #coredns on <https://slack.cncf.io>
 
 More resources can be found:
 
 - Website: <https://coredns.io>
 - Blog: <https://blog.coredns.io>
 - Twitter: [@corednsio](https://twitter.com/corednsio)
-- Mailing list/group: <coredns-discuss@googlegroups.com>
+- Mailing list/group: <coredns-discuss@googlegroups.com> (not very active)
 
 ## Deployment
 
-Examples for deployment via systemd and other use cases can be found in the
-[deployment repository](https://github.com/coredns/deployment).
+Examples for deployment via systemd and other use cases can be found in the [deployment
+repository](https://github.com/coredns/deployment).
 
 ## Security
 
-If you find a security vulnerability or any security related issues,
-please DO NOT file a public issue, instead send your report privately to
-`security@coredns.io`. Security reports are greatly appreciated and we
-will publicly thank you for it.
+If you find a security vulnerability or any security related issues, please DO NOT file a public
+issue, instead send your report privately to `security@coredns.io`. Security reports are greatly
+appreciated and we will publicly thank you for it.
+
+Please consult [security vulnerability disclosures and security fix and release process document](https://github.com/coredns/coredns/SECURITY-RELEASE-PROCESS.md)

@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/healthcheck"
+	"github.com/coredns/coredns/plugin/pkg/parse"
 	"github.com/coredns/coredns/plugin/pkg/tls"
 	"github.com/mholt/caddy/caddyfile"
 	"github.com/miekg/dns"
@@ -60,7 +60,7 @@ func NewStaticUpstream(c *caddyfile.Dispenser) (Upstream, error) {
 	}
 
 	// process the host list, substituting in any nameservers in files
-	toHosts, err := dnsutil.ParseHostPortOrFile(to...)
+	toHosts, err := parse.HostPortOrFile(to...)
 	if err != nil {
 		return upstream, err
 	}
@@ -164,8 +164,6 @@ func parseBlock(c *caddyfile.Dispenser, u *staticUpstream) error {
 			} else {
 				u.ex = newDNSEx()
 			}
-		case "https_google":
-			// allow the config, but make noop
 		case "grpc":
 			if len(encArgs) == 2 && encArgs[1] == "insecure" {
 				u.ex = newGrpcClient(nil, u)

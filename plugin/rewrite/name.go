@@ -1,19 +1,23 @@
 package rewrite
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/request"
+
 	"github.com/miekg/dns"
 )
 
-type nameRule struct {
+type exactNameRule struct {
 	NextAction string
 	From       string
 	To         string
+	ResponseRule
 }
 
 type prefixNameRule struct {
@@ -55,47 +59,47 @@ const (
 )
 
 // Rewrite rewrites the current request based upon exact match of the name
-// in the question section of the request
-func (rule *nameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
-	if rule.From == r.Question[0].Name {
-		r.Question[0].Name = rule.To
+// in the question section of the request.
+func (rule *exactNameRule) Rewrite(ctx context.Context, state request.Request) Result {
+	if rule.From == state.Name() {
+		state.Req.Question[0].Name = rule.To
 		return RewriteDone
 	}
 	return RewriteIgnored
 }
 
-// Rewrite rewrites the current request when the name begins with the matching string
-func (rule *prefixNameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
-	if strings.HasPrefix(r.Question[0].Name, rule.Prefix) {
-		r.Question[0].Name = rule.Replacement + strings.TrimLeft(r.Question[0].Name, rule.Prefix)
+// Rewrite rewrites the current request when the name begins with the matching string.
+func (rule *prefixNameRule) Rewrite(ctx context.Context, state request.Request) Result {
+	if strings.HasPrefix(state.Name(), rule.Prefix) {
+		state.Req.Question[0].Name = rule.Replacement + strings.TrimPrefix(state.Name(), rule.Prefix)
 		return RewriteDone
 	}
 	return RewriteIgnored
 }
 
-// Rewrite rewrites the current request when the name ends with the matching string
-func (rule *suffixNameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
-	if strings.HasSuffix(r.Question[0].Name, rule.Suffix) {
-		r.Question[0].Name = strings.TrimRight(r.Question[0].Name, rule.Suffix) + rule.Replacement
+// Rewrite rewrites the current request when the name ends with the matching string.
+func (rule *suffixNameRule) Rewrite(ctx context.Context, state request.Request) Result {
+	if strings.HasSuffix(state.Name(), rule.Suffix) {
+		state.Req.Question[0].Name = strings.TrimSuffix(state.Name(), rule.Suffix) + rule.Replacement
 		return RewriteDone
 	}
 	return RewriteIgnored
 }
 
 // Rewrite rewrites the current request based upon partial match of the
-// name in the question section of the request
-func (rule *substringNameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
-	if strings.Contains(r.Question[0].Name, rule.Substring) {
-		r.Question[0].Name = strings.Replace(r.Question[0].Name, rule.Substring, rule.Replacement, -1)
+// name in the question section of the request.
+func (rule *substringNameRule) Rewrite(ctx context.Context, state request.Request) Result {
+	if strings.Contains(state.Name(), rule.Substring) {
+		state.Req.Question[0].Name = strings.Replace(state.Name(), rule.Substring, rule.Replacement, -1)
 		return RewriteDone
 	}
 	return RewriteIgnored
 }
 
 // Rewrite rewrites the current request when the name in the question
-// section of the request matches a regular expression
-func (rule *regexNameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
-	regexGroups := rule.Pattern.FindStringSubmatch(r.Question[0].Name)
+// section of the request matches a regular expression.
+func (rule *regexNameRule) Rewrite(ctx context.Context, state request.Request) Result {
+	regexGroups := rule.Pattern.FindStringSubmatch(state.Name())
 	if len(regexGroups) == 0 {
 		return RewriteIgnored
 	}
@@ -106,114 +110,200 @@ func (rule *regexNameRule) Rewrite(w dns.ResponseWriter, r *dns.Msg) Result {
 			s = strings.Replace(s, groupIndexStr, groupValue, -1)
 		}
 	}
-	r.Question[0].Name = s
+	state.Req.Question[0].Name = s
 	return RewriteDone
 }
 
 // newNameRule creates a name matching rule based on exact, partial, or regex match
 func newNameRule(nextAction string, args ...string) (Rule, error) {
+	var matchType, rewriteQuestionFrom, rewriteQuestionTo string
+	var rewriteAnswerField, rewriteAnswerFrom, rewriteAnswerTo string
 	if len(args) < 2 {
 		return nil, fmt.Errorf("too few arguments for a name rule")
 	}
-	if len(args) == 3 {
-		switch strings.ToLower(args[0]) {
+	if len(args) == 2 {
+		matchType = "exact"
+		rewriteQuestionFrom = plugin.Name(args[0]).Normalize()
+		rewriteQuestionTo = plugin.Name(args[1]).Normalize()
+	}
+	if len(args) >= 3 {
+		matchType = strings.ToLower(args[0])
+		rewriteQuestionFrom = plugin.Name(args[1]).Normalize()
+		rewriteQuestionTo = plugin.Name(args[2]).Normalize()
+	}
+	if matchType == RegexMatch {
+		rewriteQuestionFrom = args[1]
+		rewriteQuestionTo = args[2]
+	}
+	if matchType == ExactMatch || matchType == SuffixMatch {
+		if !hasClosingDot(rewriteQuestionFrom) {
+			rewriteQuestionFrom = rewriteQuestionFrom + "."
+		}
+		if !hasClosingDot(rewriteQuestionTo) {
+			rewriteQuestionTo = rewriteQuestionTo + "."
+		}
+	}
+
+	if len(args) > 3 && len(args) != 7 {
+		return nil, fmt.Errorf("response rewrites must consist only of a name rule with 3 arguments and an answer rule with 3 arguments")
+	}
+
+	if len(args) < 7 {
+		switch matchType {
 		case ExactMatch:
-			return &nameRule{nextAction, plugin.Name(args[1]).Normalize(), plugin.Name(args[2]).Normalize()}, nil
-		case PrefixMatch:
-			return &prefixNameRule{nextAction, plugin.Name(args[1]).Normalize(), plugin.Name(args[2]).Normalize()}, nil
-		case SuffixMatch:
-			return &suffixNameRule{nextAction, plugin.Name(args[1]).Normalize(), plugin.Name(args[2]).Normalize()}, nil
-		case SubstringMatch:
-			return &substringNameRule{nextAction, plugin.Name(args[1]).Normalize(), plugin.Name(args[2]).Normalize()}, nil
-		case RegexMatch:
-			regexPattern, err := regexp.Compile(args[1])
+			rewriteAnswerFromPattern, err := isValidRegexPattern(rewriteQuestionTo, rewriteQuestionFrom)
 			if err != nil {
-				return nil, fmt.Errorf("Invalid regex pattern in a name rule: %s", args[1])
+				return nil, err
 			}
-			return &regexNameRule{nextAction, regexPattern, plugin.Name(args[2]).Normalize(), ResponseRule{}}, nil
+			return &exactNameRule{
+				nextAction,
+				rewriteQuestionFrom,
+				rewriteQuestionTo,
+				ResponseRule{
+					Active:      true,
+					Type:        "name",
+					Pattern:     rewriteAnswerFromPattern,
+					Replacement: rewriteQuestionFrom,
+				},
+			}, nil
+		case PrefixMatch:
+			return &prefixNameRule{
+				nextAction,
+				rewriteQuestionFrom,
+				rewriteQuestionTo,
+			}, nil
+		case SuffixMatch:
+			return &suffixNameRule{
+				nextAction,
+				rewriteQuestionFrom,
+				rewriteQuestionTo,
+			}, nil
+		case SubstringMatch:
+			return &substringNameRule{
+				nextAction,
+				rewriteQuestionFrom,
+				rewriteQuestionTo,
+			}, nil
+		case RegexMatch:
+			rewriteQuestionFromPattern, err := isValidRegexPattern(rewriteQuestionFrom, rewriteQuestionTo)
+			if err != nil {
+				return nil, err
+			}
+			rewriteQuestionTo := plugin.Name(args[2]).Normalize()
+			return &regexNameRule{
+				nextAction,
+				rewriteQuestionFromPattern,
+				rewriteQuestionTo,
+				ResponseRule{
+					Type: "name",
+				},
+			}, nil
 		default:
-			return nil, fmt.Errorf("A name rule supports only exact, prefix, suffix, substring, and regex name matching")
+			return nil, fmt.Errorf("A name rule supports only exact, prefix, suffix, substring, and regex name matching, received: %s", matchType)
 		}
 	}
 	if len(args) == 7 {
-		if strings.ToLower(args[0]) == RegexMatch {
+		if matchType == RegexMatch {
 			if args[3] != "answer" {
 				return nil, fmt.Errorf("exceeded the number of arguments for a regex name rule")
 			}
-			switch strings.ToLower(args[4]) {
+			rewriteQuestionFromPattern, err := isValidRegexPattern(rewriteQuestionFrom, rewriteQuestionTo)
+			if err != nil {
+				return nil, err
+			}
+			rewriteAnswerField = strings.ToLower(args[4])
+			switch rewriteAnswerField {
 			case "name":
 			default:
 				return nil, fmt.Errorf("exceeded the number of arguments for a regex name rule")
 			}
-			regexPattern, err := regexp.Compile(args[1])
+			rewriteAnswerFrom = args[5]
+			rewriteAnswerTo = args[6]
+			rewriteAnswerFromPattern, err := isValidRegexPattern(rewriteAnswerFrom, rewriteAnswerTo)
 			if err != nil {
-				return nil, fmt.Errorf("Invalid regex pattern in a name rule: %s", args)
+				return nil, err
 			}
-			responseRegexPattern, err := regexp.Compile(args[5])
-			if err != nil {
-				return nil, fmt.Errorf("Invalid regex pattern in a name rule: %s", args)
-			}
+			rewriteQuestionTo = plugin.Name(args[2]).Normalize()
+			rewriteAnswerTo = plugin.Name(args[6]).Normalize()
 			return &regexNameRule{
 				nextAction,
-				regexPattern,
-				plugin.Name(args[2]).Normalize(),
+				rewriteQuestionFromPattern,
+				rewriteQuestionTo,
 				ResponseRule{
 					Active:      true,
-					Pattern:     responseRegexPattern,
-					Replacement: plugin.Name(args[6]).Normalize(),
+					Type:        "name",
+					Pattern:     rewriteAnswerFromPattern,
+					Replacement: rewriteAnswerTo,
 				},
 			}, nil
 		}
 		return nil, fmt.Errorf("the rewrite of response is supported only for name regex rule")
 	}
-	if len(args) > 3 && len(args) != 7 {
-		return nil, fmt.Errorf("response rewrites must consist only of a name rule with 3 arguments and an answer rule with 3 arguments")
-	}
-	return &nameRule{nextAction, plugin.Name(args[0]).Normalize(), plugin.Name(args[1]).Normalize()}, nil
+	return nil, fmt.Errorf("the rewrite rule is invalid: %s", args)
 }
 
 // Mode returns the processing nextAction
-func (rule *nameRule) Mode() string {
-	return rule.NextAction
-}
-
-func (rule *prefixNameRule) Mode() string {
-	return rule.NextAction
-}
-
-func (rule *suffixNameRule) Mode() string {
-	return rule.NextAction
-}
-
-func (rule *substringNameRule) Mode() string {
-	return rule.NextAction
-}
-
-func (rule *regexNameRule) Mode() string {
-	return rule.NextAction
-}
+func (rule *exactNameRule) Mode() string     { return rule.NextAction }
+func (rule *prefixNameRule) Mode() string    { return rule.NextAction }
+func (rule *suffixNameRule) Mode() string    { return rule.NextAction }
+func (rule *substringNameRule) Mode() string { return rule.NextAction }
+func (rule *regexNameRule) Mode() string     { return rule.NextAction }
 
 // GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *nameRule) GetResponseRule() ResponseRule {
-	return ResponseRule{}
-}
+func (rule *exactNameRule) GetResponseRule() ResponseRule { return rule.ResponseRule }
 
 // GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *prefixNameRule) GetResponseRule() ResponseRule {
-	return ResponseRule{}
-}
+func (rule *prefixNameRule) GetResponseRule() ResponseRule { return ResponseRule{} }
 
 // GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *suffixNameRule) GetResponseRule() ResponseRule {
-	return ResponseRule{}
-}
+func (rule *suffixNameRule) GetResponseRule() ResponseRule { return ResponseRule{} }
 
 // GetResponseRule return a rule to rewrite the response with. Currently not implemented.
-func (rule *substringNameRule) GetResponseRule() ResponseRule {
-	return ResponseRule{}
-}
+func (rule *substringNameRule) GetResponseRule() ResponseRule { return ResponseRule{} }
 
 // GetResponseRule return a rule to rewrite the response with.
-func (rule *regexNameRule) GetResponseRule() ResponseRule {
-	return rule.ResponseRule
+func (rule *regexNameRule) GetResponseRule() ResponseRule { return rule.ResponseRule }
+
+// validName returns true if s is valid domain name and shorter than 256 characters.
+func validName(s string) bool {
+	_, ok := dns.IsDomainName(s)
+	if !ok {
+		return false
+	}
+	if len(dns.Name(s).String()) > 255 {
+		return false
+	}
+
+	return true
+}
+
+// hasClosingDot return true if s has a closing dot at the end.
+func hasClosingDot(s string) bool {
+	if strings.HasSuffix(s, ".") {
+		return true
+	}
+	return false
+}
+
+// getSubExprUsage return the number of subexpressions used in s.
+func getSubExprUsage(s string) int {
+	subExprUsage := 0
+	for i := 0; i <= 100; i++ {
+		if strings.Contains(s, "{"+strconv.Itoa(i)+"}") {
+			subExprUsage++
+		}
+	}
+	return subExprUsage
+}
+
+// isValidRegexPattern return a regular expression for pattern matching or errors, if any.
+func isValidRegexPattern(rewriteFrom, rewriteTo string) (*regexp.Regexp, error) {
+	rewriteFromPattern, err := regexp.Compile(rewriteFrom)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid regex matching pattern: %s", rewriteFrom)
+	}
+	if getSubExprUsage(rewriteTo) > rewriteFromPattern.NumSubexp() {
+		return nil, fmt.Errorf("The rewrite regex pattern (%s) uses more subexpressions than its corresponding matching regex pattern (%s)", rewriteTo, rewriteFrom)
+	}
+	return rewriteFromPattern, nil
 }

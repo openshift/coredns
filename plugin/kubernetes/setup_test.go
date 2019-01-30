@@ -15,7 +15,7 @@ import (
 func TestKubernetesParse(t *testing.T) {
 	tests := []struct {
 		input                 string        // Corefile data as string
-		shouldErr             bool          // true if test case is exected to produce an error.
+		shouldErr             bool          // true if test case is expected to produce an error.
 		expectedErrContent    string        // substring from the expected error. Empty for positive cases.
 		expectedZoneCount     int           // expected count of defined zones.
 		expectedNSCount       int           // expected count of namespaces.
@@ -397,6 +397,62 @@ kubernetes cluster.local`,
 			fall.Zero,
 			nil,
 		},
+		{
+			`kubernetes coredns.local {
+	kubeconfig
+}`,
+			true,
+			"Wrong argument count or unexpected line ending after",
+			-1,
+			0,
+			defaultResyncPeriod,
+			"",
+			podModeDisabled,
+			fall.Zero,
+			nil,
+		},
+		{
+			`kubernetes coredns.local {
+	kubeconfig file context extraarg
+}`,
+			true,
+			"Wrong argument count or unexpected line ending after",
+			-1,
+			0,
+			defaultResyncPeriod,
+			"",
+			podModeDisabled,
+			fall.Zero,
+			nil,
+		},
+		{
+			`kubernetes coredns.local {
+	kubeconfig file context
+}`,
+			false,
+			"",
+			1,
+			0,
+			defaultResyncPeriod,
+			"",
+			podModeDisabled,
+			fall.Zero,
+			nil,
+		},
+		{
+			`kubernetes coredns.local {
+    endpoint http://localhost:9090 https://localhost:9091
+}`,
+			true,
+			"multiple endpoints can only accept http",
+			-1,
+			-1,
+			defaultResyncPeriod,
+			"",
+			podModeDisabled,
+			fall.Zero,
+			nil,
+		},
 	}
 
 	for i, test := range tests {
@@ -494,7 +550,7 @@ kubernetes cluster.local`,
 func TestKubernetesParseEndpointPodNames(t *testing.T) {
 	tests := []struct {
 		input                string // Corefile data as string
-		shouldErr            bool   // true if test case is exected to produce an error.
+		shouldErr            bool   // true if test case is expected to produce an error.
 		expectedErrContent   string // substring from the expected error. Empty for positive cases.
 		expectedEndpointMode bool
 	}{
@@ -557,7 +613,7 @@ func TestKubernetesParseEndpointPodNames(t *testing.T) {
 func TestKubernetesParseNoEndpoints(t *testing.T) {
 	tests := []struct {
 		input                 string // Corefile data as string
-		shouldErr             bool   // true if test case is exected to produce an error.
+		shouldErr             bool   // true if test case is expected to produce an error.
 		expectedErrContent    string // substring from the expected error. Empty for positive cases.
 		expectedEndpointsInit bool
 	}{
@@ -619,7 +675,7 @@ func TestKubernetesParseNoEndpoints(t *testing.T) {
 func TestKubernetesParseIgnoreEmptyService(t *testing.T) {
 	tests := []struct {
 		input                 string // Corefile data as string
-		shouldErr             bool   // true if test case is exected to produce an error.
+		shouldErr             bool   // true if test case is expected to produce an error.
 		expectedErrContent    string // substring from the expected error. Empty for positive cases.
 		expectedEndpointsInit bool
 	}{

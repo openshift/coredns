@@ -6,8 +6,8 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/coredns/coredns/core/dnsserver"
-	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/nonwriter"
+	"github.com/coredns/coredns/plugin/pkg/parse"
 	"github.com/coredns/coredns/plugin/proxy"
 	"github.com/coredns/coredns/request"
 )
@@ -18,16 +18,16 @@ type Upstream struct {
 	Forward *proxy.Proxy
 }
 
-// NewUpstream creates a new Upstream for given destination(s). If dests is empty
-// it default to upstreaming to Self.
-func NewUpstream(dests []string) (Upstream, error) {
+// New creates a new Upstream for given destination(s). If dests is empty it default to upstreaming to
+// the coredns process.
+func New(dests []string) (Upstream, error) {
 	u := Upstream{}
 	if len(dests) == 0 {
 		u.self = true
 		return u, nil
 	}
 	u.self = false
-	ups, err := dnsutil.ParseHostPortOrFile(dests...)
+	ups, err := parse.HostPortOrFile(dests...)
 	if err != nil {
 		return u, err
 	}

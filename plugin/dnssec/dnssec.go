@@ -18,19 +18,21 @@ import (
 type Dnssec struct {
 	Next plugin.Handler
 
-	zones    []string
-	keys     []*DNSKEY
-	inflight *singleflight.Group
-	cache    *cache.Cache
+	zones     []string
+	keys      []*DNSKEY
+	splitkeys bool
+	inflight  *singleflight.Group
+	cache     *cache.Cache
 }
 
 // New returns a new Dnssec.
-func New(zones []string, keys []*DNSKEY, next plugin.Handler, c *cache.Cache) Dnssec {
+func New(zones []string, keys []*DNSKEY, splitkeys bool, next plugin.Handler, c *cache.Cache) Dnssec {
 	return Dnssec{Next: next,
-		zones:    zones,
-		keys:     keys,
-		cache:    c,
-		inflight: new(singleflight.Group),
+		zones:     zones,
+		keys:      keys,
+		splitkeys: splitkeys,
+		cache:     c,
+		inflight:  new(singleflight.Group),
 	}
 }
 
@@ -46,21 +48,6 @@ func (d Dnssec) Sign(state request.Request, now time.Time, server string) *dns.M
 
 	mt, _ := response.Typify(req, time.Now().UTC()) // TODO(miek): need opt record here?
 	if mt == response.Delegation {
-		// This reverts 11203e44. Reverting with git revert leads to conflicts in dnskey.go, and I'm
-		// not sure yet if we just should fiddle with inserting DSs or not.
-		// Easy way to, see #1211 for discussion.
-		/*
-			ttl := req.Ns[0].Header().Ttl
-
-			ds := []dns.RR{}
-			for i := range d.keys {
-				ds = append(ds, d.keys[i].D)
-			}
-			if sigs, err := d.sign(ds, zone, ttl, incep, expir); err == nil {
-				req.Ns = append(req.Ns, ds...)
-				req.Ns = append(req.Ns, sigs...)
-			}
-		*/
 		return req
 	}
 
@@ -98,7 +85,7 @@ func (d Dnssec) Sign(state request.Request, now time.Time, server string) *dns.M
 	for _, r := range rrSets(req.Extra) {
 		ttl := r[0].Header().Ttl
 		if sigs, err := d.sign(r, state.Zone, ttl, incep, expir, server); err == nil {
-			req.Extra = append(sigs, req.Extra...) // prepend to leave OPT alone
+			req.Extra = append(req.Extra, sigs...)
 		}
 	}
 	return req
@@ -112,24 +99,36 @@ func (d Dnssec) sign(rrs []dns.RR, signerName string, ttl, incep, expir uint32, 
 	}
 
 	sigs, err := d.inflight.Do(k, func() (interface{}, error) {
-		sigs := make([]dns.RR, len(d.keys))
-		var e error
-		for i, k := range d.keys {
+		var sigs []dns.RR
+		for _, k := range d.keys {
+			if d.splitkeys {
+				if len(rrs) > 0 && rrs[0].Header().Rrtype == dns.TypeDNSKEY {
+					// We are signing a DNSKEY RRSet. With split keys, we need to use a KSK here.
+					if !k.isKSK() {
+						continue
+					}
+				} else {
+					// For non-DNSKEY RRSets, we want to use a ZSK.
+					if !k.isZSK() {
+						continue
+					}
+				}
+			}
 			sig := k.newRRSIG(signerName, ttl, incep, expir)
-			e = sig.Sign(k.s, rrs)
-			sigs[i] = sig
+			if e := sig.Sign(k.s, rrs); e != nil {
+				return sigs, e
+			}
+			sigs = append(sigs, sig)
 		}
 		d.set(k, sigs)
-		return sigs, e
+		return sigs, nil
 	})
 	return sigs.([]dns.RR), err
 }
 
-func (d Dnssec) set(key uint32, sigs []dns.RR) {
-	d.cache.Add(key, sigs)
-}
+func (d Dnssec) set(key uint64, sigs []dns.RR) { d.cache.Add(key, sigs) }
 
-func (d Dnssec) get(key uint32, server string) ([]dns.RR, bool) {
+func (d Dnssec) get(key uint64, server string) ([]dns.RR, bool) {
 	if s, ok := d.cache.Get(key); ok {
 		// we sign for 8 days, check if a signature in the cache reached 3/4 of that
 		is75 := time.Now().UTC().Add(sixDays)

@@ -2,9 +2,8 @@ package test
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -35,8 +34,6 @@ func TestAuto(t *testing.T) {
 	}
 	defer i.Stop()
 
-	log.SetOutput(ioutil.Discard)
-
 	p := proxy.NewLookup([]string{udp})
 	state := request.Request{W: &test.ResponseWriter{}, Req: new(dns.Msg)}
 
@@ -49,7 +46,7 @@ func TestAuto(t *testing.T) {
 	}
 
 	// Write db.example.org to get example.org.
-	if err = ioutil.WriteFile(path.Join(tmpdir, "db.example.org"), []byte(zoneContent), 0644); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(tmpdir, "db.example.org"), []byte(zoneContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -64,7 +61,7 @@ func TestAuto(t *testing.T) {
 	}
 
 	// Remove db.example.org again.
-	os.Remove(path.Join(tmpdir, "db.example.org"))
+	os.Remove(filepath.Join(tmpdir, "db.example.org"))
 
 	time.Sleep(1100 * time.Millisecond) // wait for it to be picked up
 	resp, err = p.Lookup(state, "www.example.org.", dns.TypeA)
@@ -82,7 +79,6 @@ func TestAutoNonExistentZone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	log.SetOutput(ioutil.Discard)
 
 	corefile := `.:0 {
 		auto {
@@ -117,7 +113,6 @@ func TestAutoNonExistentZone(t *testing.T) {
 
 func TestAutoAXFR(t *testing.T) {
 	t.Parallel()
-	log.SetOutput(ioutil.Discard)
 
 	tmpdir, err := ioutil.TempDir(os.TempDir(), "coredns")
 	if err != nil {
@@ -144,7 +139,7 @@ func TestAutoAXFR(t *testing.T) {
 	defer i.Stop()
 
 	// Write db.example.org to get example.org.
-	if err = ioutil.WriteFile(path.Join(tmpdir, "db.example.org"), []byte(zoneContent), 0644); err != nil {
+	if err = ioutil.WriteFile(filepath.Join(tmpdir, "db.example.org"), []byte(zoneContent), 0644); err != nil {
 		t.Fatal(err)
 	}
 

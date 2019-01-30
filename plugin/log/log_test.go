@@ -8,20 +8,24 @@ import (
 	"testing"
 
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
+	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/response"
 	"github.com/coredns/coredns/plugin/test"
 
 	"github.com/miekg/dns"
 )
 
+func init() { clog.Discard() }
+
 func TestLoggedStatus(t *testing.T) {
-	var f bytes.Buffer
 	rule := Rule{
 		NameScope: ".",
 		Format:    DefaultLogFormat,
-		Log:       log.New(&f, "", 0),
-		Class:     map[response.Class]bool{response.All: true},
+		Class:     map[response.Class]struct{}{response.All: struct{}{}},
 	}
+
+	var f bytes.Buffer
+	log.SetOutput(&f)
 
 	logger := Logger{
 		Rules: []Rule{rule},
@@ -46,13 +50,14 @@ func TestLoggedStatus(t *testing.T) {
 }
 
 func TestLoggedClassDenial(t *testing.T) {
-	var f bytes.Buffer
 	rule := Rule{
 		NameScope: ".",
 		Format:    DefaultLogFormat,
-		Log:       log.New(&f, "", 0),
-		Class:     map[response.Class]bool{response.Denial: true},
+		Class:     map[response.Class]struct{}{response.Denial: struct{}{}},
 	}
+
+	var f bytes.Buffer
+	log.SetOutput(&f)
 
 	logger := Logger{
 		Rules: []Rule{rule},
@@ -74,13 +79,14 @@ func TestLoggedClassDenial(t *testing.T) {
 }
 
 func TestLoggedClassError(t *testing.T) {
-	var f bytes.Buffer
 	rule := Rule{
 		NameScope: ".",
 		Format:    DefaultLogFormat,
-		Log:       log.New(&f, "", 0),
-		Class:     map[response.Class]bool{response.Error: true},
+		Class:     map[response.Class]struct{}{response.Error: struct{}{}},
 	}
+
+	var f bytes.Buffer
+	log.SetOutput(&f)
 
 	logger := Logger{
 		Rules: []Rule{rule},

@@ -3,9 +3,10 @@ package file
 import (
 	"fmt"
 	"net"
-	"path"
+	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/coredns/coredns/plugin/file/tree"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
@@ -27,7 +28,8 @@ type Zone struct {
 	TransferFrom []string
 	Expired      *bool
 
-	NoReload       bool
+	ReloadInterval time.Duration
+	LastReloaded   time.Time
 	reloadMu       sync.RWMutex
 	reloadShutdown chan bool
 	Upstream       upstream.Upstream // Upstream for looking up names during the resolution process
@@ -46,10 +48,11 @@ func NewZone(name, file string) *Zone {
 	z := &Zone{
 		origin:         dns.Fqdn(name),
 		origLen:        dns.CountLabel(dns.Fqdn(name)),
-		file:           path.Clean(file),
+		file:           filepath.Clean(file),
 		Tree:           &tree.Tree{},
 		Expired:        new(bool),
 		reloadShutdown: make(chan bool),
+		LastReloaded:   time.Now(),
 	}
 	*z.Expired = false
 
@@ -124,6 +127,20 @@ func (z *Zone) Insert(r dns.RR) error {
 // Delete deletes r from z.
 func (z *Zone) Delete(r dns.RR) { z.Tree.Delete(r) }
 
+// File retrieves the file path in a safe way
+func (z *Zone) File() string {
+	z.reloadMu.Lock()
+	defer z.reloadMu.Unlock()
+	return z.file
+}
+
+// SetFile updates the file path in a safe way
+func (z *Zone) SetFile(path string) {
+	z.reloadMu.Lock()
+	z.file = path
+	z.reloadMu.Unlock()
+}
+
 // TransferAllowed checks if incoming request for transferring the zone is allowed according to the ACLs.
 func (z *Zone) TransferAllowed(state request.Request) bool {
 	for _, t := range z.TransferTo {
@@ -147,7 +164,7 @@ func (z *Zone) TransferAllowed(state request.Request) bool {
 // All returns all records from the zone, the first record will be the SOA record,
 // otionally followed by all RRSIG(SOA)s.
 func (z *Zone) All() []dns.RR {
-	if !z.NoReload {
+	if z.ReloadInterval > 0 {
 		z.reloadMu.RLock()
 		defer z.reloadMu.RUnlock()
 	}
@@ -189,7 +206,7 @@ func (z *Zone) nameFromRight(qname string, i int) (string, bool) {
 	}
 
 	k := 0
-	shot := false
+	var shot bool
 	for j := 1; j <= i; j++ {
 		k, shot = dns.PrevLabel(qname, j+z.origLen)
 		if shot {
