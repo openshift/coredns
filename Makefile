@@ -81,13 +81,13 @@ pb:
 linter:
 	go get -u github.com/alecthomas/gometalinter
 	gometalinter --install golint
-	gometalinter --deadline=2m --disable-all --enable=gofmt --enable=golint --enable=vet --vendor --exclude=^pb/ ./...
+	gometalinter --deadline=10m --disable-all --enable=gofmt --enable=golint --enable=vet --vendor --exclude=^pb/ ./...
 
 .PHONY: goimports
 goimports:
 	go get -u github.com/alecthomas/gometalinter
 	gometalinter --install goimports
-	( gometalinter --deadline=2m --disable-all --enable=goimports --vendor --exclude=^pb/ ./... || true )
+	( gometalinter --deadline=10m --disable-all --enable=goimports --vendor --exclude=^pb/ ./... || true )
 
 # Presubmit runs all scripts in .presubmit; any non 0 exit code will fail the build.
 .PHONY: presubmit
