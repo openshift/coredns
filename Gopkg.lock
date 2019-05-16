@@ -84,6 +84,14 @@
   revision = "3a771d992973f24aa725d07868b467d1ddfceafb"
 
 [[projects]]
+  digest = "1:cdee563173093e5ae7ab2a19c298e0904129719e1919a3c532b7bb0c3398b818"
+  name = "github.com/cenkalti/backoff"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "4b4cebaf850ec58f1bb1fec5bdebdf8501c2bc3f"
+  version = "v3.0.0"
+
+[[projects]]
   digest = "1:22db66c6af48fe0e93e971d796cad565ee9e0039646bd59bc8e29b7a7bd2d24e"
   name = "github.com/coreos/etcd"
   packages = [
@@ -267,6 +275,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:dd80c3c773f81ccd716d7e318436cbefb4522542b1ef809a0b911c6fd5abb33f"
+  name = "github.com/grandcat/zeroconf"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "85eadb44205c14827ae7cbb129bc7eed4488dd25"
+
+[[projects]]
+  branch = "master"
   digest = "1:7b760aa6dbe426378f54934270dde1b176fda379111da2154748f030fffe4d3f"
   name = "github.com/grpc-ecosystem/grpc-opentracing"
   packages = ["go/otgrpc"]
@@ -368,6 +384,14 @@
   pruneopts = "NUT"
   revision = "4b7aa43c6742a2c18fdef89dd197aaae7dac7ccd"
   version = "1.0.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:700fa97324ff48163a07560e2871d6fdecf5e3d1e60487deea90996f25ba62f8"
+  name = "github.com/openshift-metal3/coredns-mdns"
+  packages = ["."]
+  pruneopts = "NUT"
+  revision = "cff572d8ceec3b0e88588f7252b9ab587d534c0c"
 
 [[projects]]
   branch = "master"
@@ -854,6 +878,7 @@
     "github.com/mholt/caddy/caddyfile",
     "github.com/mholt/caddy/onevent",
     "github.com/miekg/dns",
+    "github.com/openshift-metal3/coredns-mdns",
     "github.com/opentracing/opentracing-go",
     "github.com/opentracing/opentracing-go/mocktracer",
     "github.com/openzipkin/zipkin-go-opentracing",

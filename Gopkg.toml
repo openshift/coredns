@@ -33,3 +33,7 @@ ignored = [
 [[override]]
     name = "github.com/prometheus/client_golang"
     version = "=v0.9.1"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/openshift-metal3/coredns-mdns"
