@@ -1,0 +1,23 @@
+approvers:
+  - knobunc
+  - smarterclayton
+  - ironcladlou
+  - danehans
+  - Miciah
+
+features:
+  - comments
+  - reviewers
+  - aliases
+  - branches
+  - exec
+
+aliases:
+  - |
+    /plugin: (.*) -> /label add: plugin/$1
+  - |
+    /approve -> /lgtm
+  - |
+    /wai -> /label add: works as intended
+  - |
+    /release: (.*) -> /exec: /opt/bin/release-coredns $1
