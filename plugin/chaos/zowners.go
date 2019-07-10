@@ -1,4 +1,4 @@
 package chaos
 
 // Owners are all GitHub handlers of all maintainers.
-var Owners = []string{"bradbeam", "chrisohaver", "darshanime", "dilyevsky", "ekleiner", "fastest963", "greenpau", "ihac", "inigohu", "isolus", "johnbelamaric", "miekg", "nchrisdk", "nitisht", "pmoroney", "rajansandeep", "rdrozhdzh", "rtreffer", "stp-ip", "superq", "varyoo", "ykhr53", "yongtang", "zouyee"}
+var Owners = []string{"Miciah", "bradbeam", "chrisohaver", "danehans", "dilyevsky", "ekleiner", "fastest963", "greenpau", "grobie", "inigohu", "ironcladlou", "isolus", "johnbelamaric", "knobunc", "miekg", "nchrisdk", "nitisht", "pmoroney", "rajansandeep", "rdrozhdzh", "rtreffer", "smarterclayton", "superq", "varyoo", "yongtang"}

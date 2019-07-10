@@ -51,4 +51,6 @@ import (
 	_ "github.com/coredns/coredns/plugin/trace"
 	_ "github.com/coredns/coredns/plugin/transfer"
 	_ "github.com/coredns/coredns/plugin/whoami"
+
+	_ "github.com/openshift/coredns-mdns"
 )
