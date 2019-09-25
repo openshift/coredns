@@ -10,6 +10,7 @@ require (
 	github.com/dnstap/golang-dnstap v0.0.0-20170829151710-2cf77a2b5e11
 	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/farsightsec/golang-framestream v0.0.0-20181102145529-8a0cb8ba8710
+	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/golang/protobuf v1.3.1
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/googleapis/gnostic v0.3.0 // indirect
@@ -20,7 +21,6 @@ require (
 	github.com/openshift/coredns-mdns v0.0.0-20190710141149-66c708637267
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.3.5
-	github.com/openzipkin/zipkin-go-opentracing v0.3.5
 	github.com/prometheus/client_golang v1.0.0
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90
 	github.com/prometheus/common v0.6.0
