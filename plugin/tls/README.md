@@ -11,7 +11,7 @@ or are using gRPC (https://grpc.io/, not an IETF standard). Normally DNS traffic
 all (DNSSEC only signs resource records).
 
 The *tls* "plugin" allows you to configure the cryptographic keys that are needed for both
-DNS-over-TLS and DNS-over-gRPC. If the `tls` directive is omitted, then no encryption takes place.
+DNS-over-TLS and DNS-over-gRPC. If the *tls* plugin is omitted, then no encryption takes place.
 
 The gRPC protobuffer is defined in `pb/dns.proto`. It defines the proto as a simple wrapper for the
 wire data of a DNS message.
@@ -30,9 +30,10 @@ tls CERT KEY [CA] {
 }
 ~~~
 
-If client_auth option is specified, it controls the client authentication policy.
+If client\_auth option is specified, it controls the client authentication policy.
 The option value corresponds to the [ClientAuthType values of the Go tls package](https://golang.org/pkg/crypto/tls/#ClientAuthType): NoClientCert, RequestClientCert, RequireAnyClientCert, VerifyClientCertIfGiven, and RequireAndVerifyClientCert, respectively.
-The default is "nocert".  Note that it makes no sense to specify parameter CA unless this option is set to verify_if_given or require_and_verify.
+The default is "nocert".  Note that it makes no sense to specify parameter CA unless this option is
+set to verify\_if\_given or require\_and\_verify.
 
 ## Examples
 

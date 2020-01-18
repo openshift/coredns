@@ -16,18 +16,22 @@
 package object
 
 import (
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/cache"
 )
 
 // ToFunc converts one empty interface to another.
 type ToFunc func(interface{}) interface{}
 
+// ProcessorBuilder returns function to process cache events.
+type ProcessorBuilder func(cache.Indexer, cache.ResourceEventHandler) cache.ProcessFunc
+
 // Empty is an empty struct.
 type Empty struct{}
 
-// GetObjectKind implementss the ObjectKind interface as a noop.
+// GetObjectKind implements the ObjectKind interface as a noop.
 func (e *Empty) GetObjectKind() schema.ObjectKind { return schema.EmptyObjectKind }
 
 // GetGenerateName implements the metav1.Object interface.
@@ -83,12 +87,6 @@ func (e *Empty) GetAnnotations() map[string]string { return nil }
 
 // SetAnnotations implements the metav1.Object interface.
 func (e *Empty) SetAnnotations(annotations map[string]string) {}
-
-// GetInitializers implements the metav1.Object interface.
-func (e *Empty) GetInitializers() *v1.Initializers { return nil }
-
-// SetInitializers implements the metav1.Object interface.
-func (e *Empty) SetInitializers(initializers *v1.Initializers) {}
 
 // GetFinalizers implements the metav1.Object interface.
 func (e *Empty) GetFinalizers() []string { return nil }

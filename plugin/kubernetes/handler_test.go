@@ -264,7 +264,7 @@ var dnsTestCases = []test.Case{
 		Qname: "dns-version.cluster.local.", Qtype: dns.TypeTXT,
 		Rcode: dns.RcodeSuccess,
 		Answer: []dns.RR{
-			test.TXT("dns-version.cluster.local 28800 IN TXT 1.0.1"),
+			test.TXT("dns-version.cluster.local 28800 IN TXT 1.1.0"),
 		},
 	},
 	// A Service (Headless) does not exist
@@ -337,6 +337,38 @@ var dnsTestCases = []test.Case{
 	{
 		Qname: "testns.svc.cluster.local.", Qtype: dns.TypeA,
 		Rcode: dns.RcodeSuccess,
+		Ns: []dns.RR{
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
+		},
+	},
+	// NS query for qname != zone (existing domain)
+	{
+		Qname: "svc.cluster.local.", Qtype: dns.TypeNS,
+		Rcode: dns.RcodeSuccess,
+		Ns: []dns.RR{
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
+		},
+	},
+	// NS query for qname != zone (existing domain)
+	{
+		Qname: "testns.svc.cluster.local.", Qtype: dns.TypeNS,
+		Rcode: dns.RcodeSuccess,
+		Ns: []dns.RR{
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
+		},
+	},
+	// NS query for qname != zone (non existing domain)
+	{
+		Qname: "foo.cluster.local.", Qtype: dns.TypeNS,
+		Rcode: dns.RcodeNameError,
+		Ns: []dns.RR{
+			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
+		},
+	},
+	// NS query for qname != zone (non existing domain)
+	{
+		Qname: "foo.svc.cluster.local.", Qtype: dns.TypeNS,
+		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
 			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
 		},
@@ -489,7 +521,7 @@ type APIConnServeTest struct {
 }
 
 func (a APIConnServeTest) HasSynced() bool                         { return !a.notSynced }
-func (APIConnServeTest) Run()                                      { return }
+func (APIConnServeTest) Run()                                      {}
 func (APIConnServeTest) Stop() error                               { return nil }
 func (APIConnServeTest) EpIndexReverse(string) []*object.Endpoints { return nil }
 func (APIConnServeTest) SvcIndexReverse(string) []*object.Service  { return nil }

@@ -43,11 +43,10 @@ type Kubernetes struct {
 	Fall             fall.F
 	ttl              uint32
 	opts             dnsControlOpts
-
-	primaryZoneIndex   int
-	interfaceAddrsFunc func() net.IP
-	autoPathSearch     []string // Local search path from /etc/resolv.conf. Needed for autopath.
-	TransferTo         []string
+	primaryZoneIndex int
+	localIPs         []net.IP
+	autoPathSearch   []string // Local search path from /etc/resolv.conf. Needed for autopath.
+	TransferTo       []string
 }
 
 // New returns a initialized Kubernetes. It default interfaceAddrFunc to return 127.0.0.1. All other
@@ -56,7 +55,6 @@ func New(zones []string) *Kubernetes {
 	k := new(Kubernetes)
 	k.Zones = zones
 	k.Namespaces = make(map[string]struct{})
-	k.interfaceAddrsFunc = func() net.IP { return net.ParseIP("127.0.0.1") }
 	k.podMode = podModeDisabled
 	k.ttl = defaultTTL
 
@@ -68,10 +66,10 @@ const (
 	podModeDisabled = "disabled"
 	// podModeVerified is where Pod requests are answered only if they exist
 	podModeVerified = "verified"
-	// podModeInsecure is where pod requests are answered without verfying they exist
+	// podModeInsecure is where pod requests are answered without verifying they exist
 	podModeInsecure = "insecure"
 	// DNSSchemaVersion is the schema version: https://github.com/kubernetes/dns/blob/master/docs/specification.md
-	DNSSchemaVersion = "1.0.1"
+	DNSSchemaVersion = "1.1.0"
 	// Svc is the DNS schema for kubernetes services
 	Svc = "svc"
 	// Pod is the DNS schema for kubernetes pods
@@ -107,25 +105,33 @@ func (k *Kubernetes) Services(ctx context.Context, state request.Request, exact 
 
 	case dns.TypeNS:
 		// We can only get here if the qname equals the zone, see ServeDNS in handler.go.
-		ns := k.nsAddr()
-		svc := msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), coredns), TTL: k.ttl}
-		return []msg.Service{svc}, nil
+		nss := k.nsAddrs(false, state.Zone)
+		var svcs []msg.Service
+		for _, ns := range nss {
+			if ns.Header().Rrtype == dns.TypeA {
+				svcs = append(svcs, msg.Service{Host: ns.(*dns.A).A.String(), Key: msg.Path(ns.Header().Name, coredns), TTL: k.ttl})
+				continue
+			}
+			if ns.Header().Rrtype == dns.TypeAAAA {
+				svcs = append(svcs, msg.Service{Host: ns.(*dns.AAAA).AAAA.String(), Key: msg.Path(ns.Header().Name, coredns), TTL: k.ttl})
+			}
+		}
+		return svcs, nil
 	}
 
 	if isDefaultNS(state.Name(), state.Zone) {
-		ns := k.nsAddr()
-
-		isIPv4 := ns.A.To4() != nil
-
-		if !((state.QType() == dns.TypeA && isIPv4) || (state.QType() == dns.TypeAAAA && !isIPv4)) {
-			// NODATA
-			return nil, nil
+		nss := k.nsAddrs(false, state.Zone)
+		var svcs []msg.Service
+		for _, ns := range nss {
+			if ns.Header().Rrtype == dns.TypeA && state.QType() == dns.TypeA {
+				svcs = append(svcs, msg.Service{Host: ns.(*dns.A).A.String(), Key: msg.Path(state.QName(), coredns), TTL: k.ttl})
+				continue
+			}
+			if ns.Header().Rrtype == dns.TypeAAAA && state.QType() == dns.TypeAAAA {
+				svcs = append(svcs, msg.Service{Host: ns.(*dns.AAAA).AAAA.String(), Key: msg.Path(state.QName(), coredns), TTL: k.ttl})
+			}
 		}
-
-		// If this is an A request for "ns.dns", respond with a "fake" record for coredns.
-		// SOA records always use this hardcoded name
-		svc := msg.Service{Host: ns.A.String(), Key: msg.Path(state.QName(), coredns), TTL: k.ttl}
-		return []msg.Service{svc}, nil
+		return svcs, nil
 	}
 
 	s, e := k.Records(ctx, state, false)
@@ -179,7 +185,7 @@ func (k *Kubernetes) getClientConfig() (*rest.Config, error) {
 	}
 
 	// Connect to API from out of cluster
-	// Only the first one is used. We will deprecated multiple endpoints later.
+	// Only the first one is used. We will deprecate multiple endpoints later.
 	clusterinfo.Server = k.APIServerList[0]
 
 	if len(k.APICertAuth) > 0 {

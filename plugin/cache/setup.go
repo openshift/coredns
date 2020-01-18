@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -16,12 +17,7 @@ import (
 
 var log = clog.NewWithPlugin("cache")
 
-func init() {
-	caddy.RegisterPlugin("cache", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("cache", setup) }
 
 func setup(c *caddy.Controller) error {
 	ca, err := cacheParse(c)
@@ -36,7 +32,7 @@ func setup(c *caddy.Controller) error {
 	c.OnStartup(func() error {
 		metrics.MustRegister(c,
 			cacheSize, cacheHits, cacheMisses,
-			cachePrefetches, cacheDrops)
+			cachePrefetches, cacheDrops, servedStale)
 		return nil
 	})
 
@@ -181,6 +177,22 @@ func cacheParse(c *caddy.Controller) (*Cache, error) {
 					ca.percentage = num
 				}
 
+			case "serve_stale":
+				args := c.RemainingArgs()
+				if len(args) > 1 {
+					return nil, c.ArgErr()
+				}
+				ca.staleUpTo = 1 * time.Hour
+				if len(args) == 1 {
+					d, err := time.ParseDuration(args[0])
+					if err != nil {
+						return nil, err
+					}
+					if d < 0 {
+						return nil, errors.New("invalid negative duration for serve_stale")
+					}
+					ca.staleUpTo = d
+				}
 			default:
 				return nil, c.ArgErr()
 			}

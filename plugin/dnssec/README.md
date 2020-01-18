@@ -2,11 +2,11 @@
 
 ## Name
 
-*dnssec* - enable on-the-fly DNSSEC signing of served data.
+*dnssec* - enables on-the-fly DNSSEC signing of served data.
 
 ## Description
 
-With *dnssec* any reply that doesn't (or can't) do DNSSEC will get signed on the fly. Authenticated
+With *dnssec*, any reply that doesn't (or can't) do DNSSEC will get signed on the fly. Authenticated
 denial of existence is implemented with NSEC black lies. Using ECDSA as an algorithm is preferred as
 this leads to smaller signatures (compared to RSA). NSEC3 is *not* supported.
 
@@ -51,7 +51,7 @@ used (See [bugs](#bugs)).
 
 ## Metrics
 
-If monitoring is enabled (via the *prometheus* directive) then the following metrics are exported:
+If monitoring is enabled (via the *prometheus* plugin) then the following metrics are exported:
 
 * `coredns_dnssec_cache_size{server, type}` - total elements in the cache, type is "signature".
 * `coredns_dnssec_cache_hits_total{server}` - Counter of cache hits.

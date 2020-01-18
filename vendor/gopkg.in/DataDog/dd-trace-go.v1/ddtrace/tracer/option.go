@@ -1,15 +1,24 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2016-2019 Datadog, Inc.
+
 package tracer
 
 import (
+	"math"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
+	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
 )
 
 // config holds the tracer configuration.
@@ -47,6 +56,17 @@ type config struct {
 	// logger specifies the logger to use when printing errors. If not specified, the "log" package
 	// will be used.
 	logger ddtrace.Logger
+
+	// runtimeMetrics specifies whether collection of runtime metrics is enabled.
+	runtimeMetrics bool
+
+	// dogstatsdAddr specifies the address to connect for sending metrics to the
+	// Datadog Agent. If not set, it defaults to "localhost:8125" or to the
+	// combination of the environment variables DD_AGENT_HOST and DD_DOGSTATSD_PORT.
+	dogstatsdAddr string
+
+	// statsd is used for tracking metrics associated with the runtime and the tracer.
+	statsd statsdClient
 }
 
 // StartOption represents a function that can be provided as a parameter to Start.
@@ -58,6 +78,15 @@ func defaults(c *config) {
 	c.sampler = NewAllSampler()
 	c.agentAddr = defaultAddress
 
+	statsdHost, statsdPort := "localhost", "8125"
+	if v := os.Getenv("DD_AGENT_HOST"); v != "" {
+		statsdHost = v
+	}
+	if v := os.Getenv("DD_DOGSTATSD_PORT"); v != "" {
+		statsdPort = v
+	}
+	c.dogstatsdAddr = net.JoinHostPort(statsdHost, statsdPort)
+
 	if os.Getenv("DD_TRACE_REPORT_HOSTNAME") == "true" {
 		var err error
 		c.hostname, err = os.Hostname()
@@ -65,6 +94,29 @@ func defaults(c *config) {
 			log.Warn("unable to look up hostname: %v", err)
 		}
 	}
+	if v := os.Getenv("DD_ENV"); v != "" {
+		WithEnv(v)(c)
+	}
+}
+
+func statsTags(c *config) []string {
+	tags := []string{
+		"lang:go",
+		"version:" + version.Tag,
+		"lang_version:" + runtime.Version(),
+	}
+	if c.serviceName != "" {
+		tags = append(tags, "service:"+c.serviceName)
+	}
+	if c.hostname != "" {
+		tags = append(tags, "host:"+c.hostname)
+	}
+	if v, ok := c.globalTags[ext.Environment]; ok {
+		if vv, ok := v.(string); ok {
+			tags = append(tags, "env:"+vv)
+		}
+	}
+	return tags
 }
 
 // WithLogger sets logger as the tracer's error printer.
@@ -114,6 +166,12 @@ func WithAgentAddr(addr string) StartOption {
 	}
 }
 
+// WithEnv sets the environment to which all traces started by the tracer will be submitted.
+// The default value is the environment variable DD_ENV, if it is set.
+func WithEnv(env string) StartOption {
+	return WithGlobalTag(ext.Environment, env)
+}
+
 // WithGlobalTag sets a key/value pair which will be set as a tag on all spans
 // created by tracer. This option may be used multiple times.
 func WithGlobalTag(k string, v interface{}) StartOption {
@@ -145,16 +203,40 @@ func WithHTTPRoundTripper(r http.RoundTripper) StartOption {
 // WithAnalytics allows specifying whether Trace Search & Analytics should be enabled
 // for integrations.
 func WithAnalytics(on bool) StartOption {
-	if on {
-		return WithAnalyticsRate(1.0)
+	return func(cfg *config) {
+		if on {
+			globalconfig.SetAnalyticsRate(1.0)
+		} else {
+			globalconfig.SetAnalyticsRate(math.NaN())
+		}
 	}
-	return WithAnalyticsRate(0.0)
 }
 
 // WithAnalyticsRate sets the global sampling rate for sampling APM events.
 func WithAnalyticsRate(rate float64) StartOption {
 	return func(_ *config) {
-		globalconfig.SetAnalyticsRate(rate)
+		if rate >= 0.0 && rate <= 1.0 {
+			globalconfig.SetAnalyticsRate(rate)
+		} else {
+			globalconfig.SetAnalyticsRate(math.NaN())
+		}
+	}
+}
+
+// WithRuntimeMetrics enables automatic collection of runtime metrics every 10 seconds.
+func WithRuntimeMetrics() StartOption {
+	return func(cfg *config) {
+		cfg.runtimeMetrics = true
+	}
+}
+
+// WithDogstatsdAddress specifies the address to connect to for sending metrics
+// to the Datadog Agent. If not set, it defaults to "localhost:8125" or to the
+// combination of the environment variables DD_AGENT_HOST and DD_DOGSTATSD_PORT.
+// This option is in effect when WithRuntimeMetrics is enabled.
+func WithDogstatsdAddress(addr string) StartOption {
+	return func(cfg *config) {
+		cfg.dogstatsdAddr = addr
 	}
 }
 

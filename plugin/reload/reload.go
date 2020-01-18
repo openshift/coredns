@@ -1,14 +1,17 @@
+// Package reload periodically checks if the Corefile has changed, and reloads if so.
 package reload
 
 import (
+	"bytes"
 	"crypto/md5"
+	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/caddyserver/caddy"
+	"github.com/caddyserver/caddy/caddyfile"
 )
 
-// reload periodically checks if the Corefile has changed, and reloads if so
 const (
 	unused    = 0
 	maybeUsed = 1
@@ -46,6 +49,14 @@ func (r *reload) interval() time.Duration {
 	return r.dur
 }
 
+func parse(corefile caddy.Input) ([]byte, error) {
+	serverBlocks, err := caddyfile.Parse(corefile.Path(), bytes.NewReader(corefile.Body()), nil)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(serverBlocks)
+}
+
 func hook(event caddy.EventName, info interface{}) error {
 	if event != caddy.InstanceStartupEvent {
 		return nil
@@ -60,7 +71,12 @@ func hook(event caddy.EventName, info interface{}) error {
 
 	// this should be an instance. ok to panic if not
 	instance := info.(*caddy.Instance)
-	md5sum := md5.Sum(instance.Caddyfile().Body())
+	parsedCorefile, err := parse(instance.Caddyfile())
+	if err != nil {
+		return err
+	}
+
+	md5sum := md5.Sum(parsedCorefile)
 	log.Infof("Running configuration MD5 = %x\n", md5sum)
 
 	go func() {
@@ -73,12 +89,17 @@ func hook(event caddy.EventName, info interface{}) error {
 				if err != nil {
 					continue
 				}
-				s := md5.Sum(corefile.Body())
+				parsedCorefile, err := parse(corefile)
+				if err != nil {
+					log.Warningf("Corefile parse failed: %s", err)
+					continue
+				}
+				s := md5.Sum(parsedCorefile)
 				if s != md5sum {
 					// Let not try to restart with the same file, even though it is wrong.
 					md5sum = s
 					// now lets consider that plugin will not be reload, unless appear in next config file
-					// change status iof usage will be reset in setup if the plugin appears in config file
+					// change status of usage will be reset in setup if the plugin appears in config file
 					r.setUsage(maybeUsed)
 					_, err := instance.Restart(corefile)
 					if err != nil {

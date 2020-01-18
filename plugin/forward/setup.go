@@ -9,19 +9,14 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/parse"
+	"github.com/coredns/coredns/plugin/pkg/policy"
 	pkgtls "github.com/coredns/coredns/plugin/pkg/tls"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
 	"github.com/caddyserver/caddy"
-	"github.com/caddyserver/caddy/caddyfile"
 )
 
-func init() {
-	caddy.RegisterPlugin("forward", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("forward", setup) }
 
 func setup(c *caddy.Controller) error {
 	f, err := parseForward(c)
@@ -60,13 +55,10 @@ func (f *Forward) OnStartup() (err error) {
 // OnShutdown stops all configured proxies.
 func (f *Forward) OnShutdown() error {
 	for _, p := range f.proxies {
-		p.close()
+		p.stop()
 	}
 	return nil
 }
-
-// Close is a synonym for OnShutdown().
-func (f *Forward) Close() { f.OnShutdown() }
 
 func parseForward(c *caddy.Controller) (*Forward, error) {
 	var (
@@ -79,7 +71,7 @@ func parseForward(c *caddy.Controller) (*Forward, error) {
 			return nil, plugin.ErrOnce
 		}
 		i++
-		f, err = ParseForwardStanza(&c.Dispenser)
+		f, err = parseStanza(c)
 		if err != nil {
 			return nil, err
 		}
@@ -87,8 +79,7 @@ func parseForward(c *caddy.Controller) (*Forward, error) {
 	return f, nil
 }
 
-// ParseForwardStanza parses one forward stanza
-func ParseForwardStanza(c *caddyfile.Dispenser) (*Forward, error) {
+func parseStanza(c *caddy.Controller) (*Forward, error) {
 	f := New()
 
 	if !c.Args(&f.from) {
@@ -133,7 +124,7 @@ func ParseForwardStanza(c *caddyfile.Dispenser) (*Forward, error) {
 	return f, nil
 }
 
-func parseBlock(c *caddyfile.Dispenser, f *Forward) error {
+func parseBlock(c *caddy.Controller, f *Forward) error {
 	switch c.Val() {
 	case "except":
 		ignore := c.RemainingArgs()
@@ -212,11 +203,11 @@ func parseBlock(c *caddyfile.Dispenser, f *Forward) error {
 		}
 		switch x := c.Val(); x {
 		case "random":
-			f.p = &random{}
+			f.p = &policy.Random{}
 		case "round_robin":
-			f.p = &roundRobin{}
+			f.p = &policy.RoundRobin{}
 		case "sequential":
-			f.p = &sequential{}
+			f.p = &policy.Sequential{}
 		default:
 			return c.Errf("unknown policy '%s'", x)
 		}

@@ -2,7 +2,6 @@ package sarama
 
 import (
 	"fmt"
-	"strings"
 )
 
 // TestReporter has methods matching go's testing.T to avoid importing
@@ -178,7 +177,7 @@ func (mmr *MockMetadataResponse) For(reqBody versionedDecoder) encoder {
 
 	// Generate set of replicas
 	replicas := []int32{}
-	offlineReplicas := []int32{}
+
 	for _, brokerID := range mmr.brokers {
 		replicas = append(replicas, brokerID)
 	}
@@ -186,14 +185,14 @@ func (mmr *MockMetadataResponse) For(reqBody versionedDecoder) encoder {
 	if len(metadataRequest.Topics) == 0 {
 		for topic, partitions := range mmr.leaders {
 			for partition, brokerID := range partitions {
-				metadataResponse.AddTopicPartition(topic, partition, brokerID, replicas, replicas, offlineReplicas, ErrNoError)
+				metadataResponse.AddTopicPartition(topic, partition, brokerID, replicas, replicas, ErrNoError)
 			}
 		}
 		return metadataResponse
 	}
 	for _, topic := range metadataRequest.Topics {
 		for partition, brokerID := range mmr.leaders[topic] {
-			metadataResponse.AddTopicPartition(topic, partition, brokerID, replicas, replicas, offlineReplicas, ErrNoError)
+			metadataResponse.AddTopicPartition(topic, partition, brokerID, replicas, replicas, ErrNoError)
 		}
 	}
 	return metadataResponse
@@ -574,7 +573,6 @@ func (mr *MockProduceResponse) getError(topic string, partition int32) KError {
 // MockOffsetFetchResponse is a `OffsetFetchResponse` builder.
 type MockOffsetFetchResponse struct {
 	offsets map[string]map[string]map[int32]*OffsetFetchResponseBlock
-	error   KError
 	t       TestReporter
 }
 
@@ -600,24 +598,14 @@ func (mr *MockOffsetFetchResponse) SetOffset(group, topic string, partition int3
 	return mr
 }
 
-func (mr *MockOffsetFetchResponse) SetError(kerror KError) *MockOffsetFetchResponse {
-	mr.error = kerror
-	return mr
-}
-
 func (mr *MockOffsetFetchResponse) For(reqBody versionedDecoder) encoder {
 	req := reqBody.(*OffsetFetchRequest)
 	group := req.ConsumerGroup
-	res := &OffsetFetchResponse{Version: req.Version}
-
+	res := &OffsetFetchResponse{}
 	for topic, partitions := range mr.offsets[group] {
 		for partition, block := range partitions {
 			res.AddBlock(topic, partition, block)
 		}
-	}
-
-	if res.Version >= 2 {
-		res.Err = mr.error
 	}
 	return res
 }
@@ -632,20 +620,10 @@ func NewMockCreateTopicsResponse(t TestReporter) *MockCreateTopicsResponse {
 
 func (mr *MockCreateTopicsResponse) For(reqBody versionedDecoder) encoder {
 	req := reqBody.(*CreateTopicsRequest)
-	res := &CreateTopicsResponse{
-		Version: req.Version,
-	}
+	res := &CreateTopicsResponse{}
 	res.TopicErrors = make(map[string]*TopicError)
 
-	for topic := range req.TopicDetails {
-		if res.Version >= 1 && strings.HasPrefix(topic, "_") {
-			msg := "insufficient permissions to create topic with reserved prefix"
-			res.TopicErrors[topic] = &TopicError{
-				Err:    ErrTopicAuthorizationFailed,
-				ErrMsg: &msg,
-			}
-			continue
-		}
+	for topic, _ := range req.TopicDetails {
 		res.TopicErrors[topic] = &TopicError{Err: ErrNoError}
 	}
 	return res
@@ -683,15 +661,7 @@ func (mr *MockCreatePartitionsResponse) For(reqBody versionedDecoder) encoder {
 	res := &CreatePartitionsResponse{}
 	res.TopicPartitionErrors = make(map[string]*TopicPartitionError)
 
-	for topic := range req.TopicPartitions {
-		if strings.HasPrefix(topic, "_") {
-			msg := "insufficient permissions to create partition on topic with reserved prefix"
-			res.TopicPartitionErrors[topic] = &TopicPartitionError{
-				Err:    ErrTopicAuthorizationFailed,
-				ErrMsg: &msg,
-			}
-			continue
-		}
+	for topic, _ := range req.TopicPartitions {
 		res.TopicPartitionErrors[topic] = &TopicPartitionError{Err: ErrNoError}
 	}
 	return res
@@ -712,7 +682,7 @@ func (mr *MockDeleteRecordsResponse) For(reqBody versionedDecoder) encoder {
 
 	for topic, deleteRecordRequestTopic := range req.Topics {
 		partitions := make(map[int32]*DeleteRecordsResponsePartition)
-		for partition := range deleteRecordRequestTopic.PartitionOffsets {
+		for partition, _ := range deleteRecordRequestTopic.PartitionOffsets {
 			partitions[partition] = &DeleteRecordsResponsePartition{Err: ErrNoError}
 		}
 		res.Topics[topic] = &DeleteRecordsResponseTopic{Partitions: partitions}
@@ -895,27 +865,4 @@ func (mr *MockDeleteAclsResponse) For(reqBody versionedDecoder) encoder {
 		res.FilterResponses = append(res.FilterResponses, response)
 	}
 	return res
-}
-
-type MockDeleteGroupsResponse struct {
-	deletedGroups []string
-}
-
-func NewMockDeleteGroupsRequest(t TestReporter) *MockDeleteGroupsResponse {
-	return &MockDeleteGroupsResponse{}
-}
-
-func (m *MockDeleteGroupsResponse) SetDeletedGroups(groups []string) *MockDeleteGroupsResponse {
-	m.deletedGroups = groups
-	return m
-}
-
-func (m *MockDeleteGroupsResponse) For(reqBody versionedDecoder) encoder {
-	resp := &DeleteGroupsResponse{
-		GroupErrorCodes: map[string]KError{},
-	}
-	for _, group := range m.deletedGroups {
-		resp.GroupErrorCodes[group] = ErrNoError
-	}
-	return resp
 }

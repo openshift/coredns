@@ -4,7 +4,7 @@
 <h3 align="center">Every Site on HTTPS <!-- Serve Confidently --></h3>
 <p align="center">Caddy is a general-purpose HTTP/2 web server that serves HTTPS by default.</p>
 <p align="center">
-	<a href="https://dev.azure.com/mholt-dev/Caddy/_build?definitionId=1"><img src="https://img.shields.io/azure-devops/build/mholt-dev/afec6074-9842-457f-98cf-69df6adbbf2e/1/master.svg?label=cross-platform%20tests"></a>
+	<a href="https://dev.azure.com/mholt-dev/Caddy/_build?definitionId=5"><img src="https://img.shields.io/azure-devops/build/mholt-dev/afec6074-9842-457f-98cf-69df6adbbf2e/5/master.svg?label=cross-platform%20tests"></a>
 	<a href="https://godoc.org/github.com/caddyserver/caddy"><img src="https://img.shields.io/badge/godoc-reference-blue.svg"></a>
 	<a href="https://goreportcard.com/report/caddyserver/caddy"><img src="https://goreportcard.com/badge/github.com/caddyserver/caddy"></a>
 	<br>
@@ -75,7 +75,7 @@ Caddy binaries have no dependencies and are available for every platform. Get Ca
 
 ## Build
 
-To build from source you need **[Git](https://git-scm.com/downloads)** and **[Go](https://golang.org/doc/install)** (1.12 or newer).
+To build from source you need **[Git](https://git-scm.com/downloads)** and **[Go](https://golang.org/doc/install)** (1.13 or newer).
 
 **To build Caddy without plugins:**
 
@@ -93,7 +93,7 @@ There is no need to modify the Caddy code to build it with plugins. We will crea
 
 <!-- TODO: This env variable will not be required starting with Go 1.13 -->
 1. Set the transitional environment variable for Go modules: `export GO111MODULE=on`
-2. Create a new folder anywhere and within create a Go file  (extension `.go`) with the contents below, adjusting to import the plugins you want to include:
+2. Create a new folder anywhere and within create a Go file (with an extension of `.go`, such as `main.go`) with the contents below, adjusting to import the plugins you want to include:
 ```go
 package main
 

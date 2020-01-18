@@ -2,18 +2,15 @@
 package coremain
 
 import (
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"runtime"
-	"strconv"
 	"strings"
 
 	"github.com/coredns/coredns/core/dnsserver"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	"github.com/caddyserver/caddy"
 )
@@ -24,7 +21,6 @@ func init() {
 	setVersion()
 
 	flag.StringVar(&conf, "conf", "", "Corefile to load (default \""+caddy.DefaultConfigFile+"\")")
-	flag.StringVar(&cpu, "cpu", "100%", "CPU cap")
 	flag.BoolVar(&plugins, "plugins", false, "List installed plugins")
 	flag.StringVar(&caddy.PidFile, "pidfile", "", "Path to write pid file")
 	flag.BoolVar(&version, "version", false, "Show version")
@@ -73,11 +69,6 @@ func Run() {
 		os.Exit(0)
 	}
 
-	// Set CPU cap
-	if err := setCPU(cpu); err != nil {
-		mustLogFatal(err)
-	}
-
 	// Get Corefile input
 	corefile, err := caddy.LoadCaddyfile(serverType)
 	if err != nil {
@@ -90,7 +81,6 @@ func Run() {
 		mustLogFatal(err)
 	}
 
-	logVersion()
 	if !dnsserver.Quiet {
 		showVersion()
 	}
@@ -149,12 +139,6 @@ func defaultLoader(serverType string) (caddy.Input, error) {
 	}, nil
 }
 
-// logVersion logs the version that is starting.
-func logVersion() {
-	clog.Info(versionString())
-	clog.Info(releaseString())
-}
-
 // showVersion prints the version that is starting.
 func showVersion() {
 	fmt.Print(versionString())
@@ -186,54 +170,16 @@ func setVersion() {
 	// Only set the appVersion if -ldflags was used
 	if gitNearestTag != "" || gitTag != "" {
 		if devBuild && gitNearestTag != "" {
-			appVersion = fmt.Sprintf("%s (+%s %s)",
-				strings.TrimPrefix(gitNearestTag, "v"), GitCommit, buildDate)
+			appVersion = fmt.Sprintf("%s (+%s %s)", strings.TrimPrefix(gitNearestTag, "v"), GitCommit, buildDate)
 		} else if gitTag != "" {
 			appVersion = strings.TrimPrefix(gitTag, "v")
 		}
 	}
 }
 
-// setCPU parses string cpu and sets GOMAXPROCS
-// according to its value. It accepts either
-// a number (e.g. 3) or a percent (e.g. 50%).
-func setCPU(cpu string) error {
-	var numCPU int
-
-	availCPU := runtime.NumCPU()
-
-	if strings.HasSuffix(cpu, "%") {
-		// Percent
-		var percent float32
-		pctStr := cpu[:len(cpu)-1]
-		pctInt, err := strconv.Atoi(pctStr)
-		if err != nil || pctInt < 1 || pctInt > 100 {
-			return errors.New("invalid CPU value: percentage must be between 1-100")
-		}
-		percent = float32(pctInt) / 100
-		numCPU = int(float32(availCPU) * percent)
-	} else {
-		// Number
-		num, err := strconv.Atoi(cpu)
-		if err != nil || num < 1 {
-			return errors.New("invalid CPU value: provide a number or percent greater than 0")
-		}
-		numCPU = num
-	}
-
-	if numCPU > availCPU {
-		numCPU = availCPU
-	}
-
-	runtime.GOMAXPROCS(numCPU)
-	return nil
-}
-
 // Flags that control program flow or startup
 var (
 	conf    string
-	cpu     string
-	logfile bool
 	version bool
 	plugins bool
 )

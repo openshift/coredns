@@ -5,22 +5,14 @@ import (
 
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	clog "github.com/coredns/coredns/plugin/pkg/log"
 	mwtls "github.com/coredns/coredns/plugin/pkg/tls"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 
-	etcdcv3 "github.com/coreos/etcd/clientv3"
 	"github.com/caddyserver/caddy"
+	etcdcv3 "go.etcd.io/etcd/clientv3"
 )
 
-var log = clog.NewWithPlugin("etcd")
-
-func init() {
-	caddy.RegisterPlugin("etcd", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("etcd", setup) }
 
 func setup(c *caddy.Controller) error {
 	e, err := etcdParse(c)

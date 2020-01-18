@@ -10,8 +10,9 @@ author = "coredns"
 The CoreDNS team has released
 [CoreDNS-1.5.2](https://github.com/coredns/coredns/releases/tag/v1.5.2).
 
-Small bugfixes and a change to Caddy's important path.
-
+Small bugfixes and a change to Caddy's import path (mholt/caddy -> caddyserver/caddy). Doing           
+a release helps plugins deal with the change better.                                                   
+                                                                  
 # Plugins
 
 * For all plugins that use the `upstream` directive it use removed from the documentation; it's still accepted
@@ -31,7 +32,7 @@ Yong Tang.
 
 ## Noteworthy Changes
 
-* plugin/file: close correctlty after AXFR (https://github.com/coredns/coredns/pull/2943)
+* plugin/file: close correctly after AXFR (https://github.com/coredns/coredns/pull/2943)
 * plugin/file: load secondary zones lazily on startup (https://github.com/coredns/coredns/pull/2944)
 * plugin/template: support metadata (https://github.com/coredns/coredns/pull/2958)
 * build: Update Caddy to 1.0.1, and update import path (https://github.com/coredns/coredns/pull/2961)

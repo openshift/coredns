@@ -13,6 +13,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/debug"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+	"github.com/coredns/coredns/plugin/pkg/policy"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -25,7 +26,7 @@ var log = clog.NewWithPlugin("forward")
 // of proxies each representing one upstream proxy.
 type Forward struct {
 	proxies    []*Proxy
-	p          Policy
+	p          policy.Policy
 	hcInterval time.Duration
 
 	from    string
@@ -43,7 +44,7 @@ type Forward struct {
 
 // New returns a new Forward.
 func New() *Forward {
-	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: ".", hcInterval: hcInterval}
+	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(policy.Random), from: ".", hcInterval: hcInterval}
 	return f
 }
 
@@ -89,10 +90,10 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			if fails < len(f.proxies) {
 				continue
 			}
-			// All upstream proxies are dead, assume healtcheck is completely broken and randomly
+			// All upstream proxies are dead, assume healthcheck is completely broken and randomly
 			// select an upstream to connect to.
-			r := new(random)
-			proxy = r.List(f.proxies)[0]
+			r := new(policy.Random)
+			proxy = r.List(f.proxies)[0].([]*Proxy)[0]
 
 			HealthcheckBrokenCount.Add(1)
 		}
@@ -109,14 +110,11 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		opts := f.opts
 		for {
 			ret, err = proxy.Connect(ctx, state, opts)
-			if err == nil {
-				break
-			}
 			if err == ErrCachedClosed { // Remote side closed conn, can only happen with TCP.
 				continue
 			}
 			// Retry with TCP if truncated and prefer_udp configured.
-			if ret != nil && ret.Truncated && !opts.forceTCP && f.opts.preferUDP {
+			if ret != nil && ret.Truncated && !opts.forceTCP && opts.preferUDP {
 				opts.forceTCP = true
 				continue
 			}
@@ -191,7 +189,12 @@ func (f *Forward) ForceTCP() bool { return f.opts.forceTCP }
 func (f *Forward) PreferUDP() bool { return f.opts.preferUDP }
 
 // List returns a set of proxies to be used for this client depending on the policy in f.
-func (f *Forward) List() []*Proxy { return f.p.List(f.proxies) }
+func (f *Forward) List() []*Proxy {
+	if len(f.p.List(f.proxies)) == 1 {
+		return f.p.List(f.proxies)[0].([]*Proxy)
+	}
+	return nil
+}
 
 var (
 	// ErrNoHealthy means no healthy proxies left.
@@ -200,15 +203,6 @@ var (
 	ErrNoForward = errors.New("no forwarder defined")
 	// ErrCachedClosed means cached connection was closed by peer.
 	ErrCachedClosed = errors.New("cached connection was closed by peer")
-)
-
-// policy tells forward what policy for selecting upstream it uses.
-type policy int
-
-const (
-	randomPolicy policy = iota
-	roundRobinPolicy
-	sequentialPolicy
 )
 
 // options holds various options that can be set.

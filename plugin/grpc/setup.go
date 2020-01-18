@@ -8,18 +8,13 @@ import (
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/parse"
+	"github.com/coredns/coredns/plugin/pkg/policy"
 	pkgtls "github.com/coredns/coredns/plugin/pkg/tls"
 
 	"github.com/caddyserver/caddy"
-	"github.com/caddyserver/caddy/caddyfile"
 )
 
-func init() {
-	caddy.RegisterPlugin("grpc", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("grpc", setup) }
 
 func setup(c *caddy.Controller) error {
 	g, err := parseGRPC(c)
@@ -55,7 +50,7 @@ func parseGRPC(c *caddy.Controller) (*GRPC, error) {
 			return nil, plugin.ErrOnce
 		}
 		i++
-		g, err = parseGRPCStanza(&c.Dispenser)
+		g, err = parseStanza(c)
 		if err != nil {
 			return nil, err
 		}
@@ -63,7 +58,7 @@ func parseGRPC(c *caddy.Controller) (*GRPC, error) {
 	return g, nil
 }
 
-func parseGRPCStanza(c *caddyfile.Dispenser) (*GRPC, error) {
+func parseStanza(c *caddy.Controller) (*GRPC, error) {
 	g := newGRPC()
 
 	if !c.Args(&g.from) {
@@ -104,7 +99,7 @@ func parseGRPCStanza(c *caddyfile.Dispenser) (*GRPC, error) {
 	return g, nil
 }
 
-func parseBlock(c *caddyfile.Dispenser, g *GRPC) error {
+func parseBlock(c *caddy.Controller, g *GRPC) error {
 
 	switch c.Val() {
 	case "except":
@@ -138,11 +133,11 @@ func parseBlock(c *caddyfile.Dispenser, g *GRPC) error {
 		}
 		switch x := c.Val(); x {
 		case "random":
-			g.p = &random{}
+			g.p = &policy.Random{}
 		case "round_robin":
-			g.p = &roundRobin{}
+			g.p = &policy.RoundRobin{}
 		case "sequential":
-			g.p = &sequential{}
+			g.p = &policy.Sequential{}
 		default:
 			return c.Errf("unknown policy '%s'", x)
 		}

@@ -1,6 +1,6 @@
 ## CoreDNS
 
-*coredns* - plugable DNS nameserver optimized for service discovery and flexibility.
+*coredns* - pluggable DNS nameserver optimized for service discovery and flexibility.
 
 ## Synopsis
 
@@ -23,9 +23,6 @@ Available options:
 **-conf** **FILE**
 : specify Corefile to load, if not given CoreDNS will look for a `Corefile` in the current
   directory.
-
-**-cpu** **CAP**
-: specify maximum CPU capacity in percent.
 
 **-dns.port** **PORT**
 : override default port (53) to listen on.

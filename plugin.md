@@ -64,6 +64,11 @@ a *Metrics* section detailing the metrics.
 If the plugin supports signalling readiness it should have a *Ready* section detailing how it
 works, and implement the `ready.Readiness` interface.
 
+## Opening Sockets
+
+See the plugin/pkg/reuseport for `Listen` and `ListenPacket` functions. Using these functions makes
+your plugin handle reload events better.
+
 ## Documentation
 
 Each plugin should have a README.md explaining what the plugin does and how it is configured. The
@@ -116,6 +121,16 @@ meaning a plugin is only responsible for a *subset* of names within the zone.
 The `fallthrough` directive should optionally accept a list of zones. Only queries for records
 in one of those zones should be allowed to fallthrough. See `plugin/pkg/fallthrough` for the
 implementation.
+
+## General Guidelines
+
+Some general guidelines:
+
+* logging time duration should be done in seconds (call the `Seconds()` method on any duration).
+* keep logging to a minimum.
+* call the main config parse function just `parse`.
+* try to minimize the number of knobs in the configuration.
+* use `plugin.Error()` to wrap errors returned from the `setup` function.
 
 ## Qualifying for Main Repo
 

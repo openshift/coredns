@@ -6,7 +6,7 @@
 
 ## Description
 
-The file plugin is used for an "old-style" DNS server. It serves from a preloaded file that exists
+The *file* plugin is used for an "old-style" DNS server. It serves from a preloaded file that exists
 on disk. If the zone file contains signatures (i.e., is signed using DNSSEC), correct DNSSEC answers
 are returned. Only NSEC is supported! If you use this setup *you* are responsible for re-signing the
 zonefile.
@@ -18,9 +18,9 @@ file DBFILE [ZONES...]
 ~~~
 
 * **DBFILE** the database file to read and parse. If the path is relative, the path from the *root*
-  directive will be prepended to it.
+  plugin will be prepended to it.
 * **ZONES** zones it should be authoritative for. If empty, the zones from the configuration block
-    are used.
+  are used.
 
 If you want to round-robin A and AAAA responses look at the *loadbalance* plugin.
 
@@ -55,7 +55,7 @@ example.org {
 
 Or use a single zone file for multiple zones:
 
-~~~
+~~~ corefile
 . {
     file example.org.signed example.org example.net {
         transfer to *
@@ -67,7 +67,7 @@ Or use a single zone file for multiple zones:
 Note that if you have a configuration like the following you may run into a problem of the origin
 not being correctly recognized:
 
-~~~
+~~~ corefile
 . {
     file db.example.org
 }
@@ -78,7 +78,7 @@ which, in this case, is the root zone. Any contents of `db.example.org` will the
 origin set; this may or may not do what you want.
 It's better to be explicit here and specify the correct origin. This can be done in two ways:
 
-~~~
+~~~ corefile
 . {
     file db.example.org example.org
 }
@@ -86,8 +86,12 @@ It's better to be explicit here and specify the correct origin. This can be done
 
 Or
 
-~~~
+~~~ corefile
 example.org {
     file db.example.org
 }
 ~~~
+
+## Also See
+
+See the *loadbalance* plugin if you need simple record shuffling.

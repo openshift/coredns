@@ -9,8 +9,9 @@ import (
 	"time"
 
 	"github.com/coredns/coredns/request"
-
 	"github.com/miekg/dns"
+
+	"golang.org/x/crypto/ed25519"
 )
 
 // DNSKEY holds a DNSSEC public and private key used for on-the-fly signing.
@@ -55,6 +56,9 @@ func ParseKeyFile(pubFile, privFile string) (*DNSKEY, error) {
 	if s, ok := p.(*ecdsa.PrivateKey); ok {
 		return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: s, tag: dk.KeyTag()}, nil
 	}
+	if s, ok := p.(ed25519.PrivateKey); ok {
+		return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: s, tag: dk.KeyTag()}, nil
+	}
 	return &DNSKEY{K: dk, D: dk.ToDS(dns.SHA256), s: nil, tag: 0}, errors.New("no private key found")
 }
 
@@ -79,12 +83,12 @@ func (d Dnssec) getDNSKEY(state request.Request, zone string, do bool, server st
 	return m
 }
 
-// Return true iff this is a zone key with the SEP bit unset. This implies a ZSK (rfc4034 2.1.1).
+// Return true if, and only if, this is a zone key with the SEP bit unset. This implies a ZSK (rfc4034 2.1.1).
 func (k DNSKEY) isZSK() bool {
 	return k.K.Flags&(1<<8) == (1<<8) && k.K.Flags&1 == 0
 }
 
-// Return true iff this is a zone key with the SEP bit set. This implies a KSK (rfc4034 2.1.1).
+// Return true if, and only if, this is a zone key with the SEP bit set. This implies a KSK (rfc4034 2.1.1).
 func (k DNSKEY) isKSK() bool {
 	return k.K.Flags&(1<<8) == (1<<8) && k.K.Flags&1 == 1
 }

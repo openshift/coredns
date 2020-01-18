@@ -58,7 +58,7 @@ func (f File) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 			if ok {
 				z.TransferIn()
 			} else {
-				log.Infof("Notify from %s for %s: no serial increase seen", state.IP(), zone)
+				log.Infof("Notify from %s for %s: no SOA serial increase seen", state.IP(), zone)
 			}
 			if err != nil {
 				log.Warningf("Notify from %s for %s: failed primary check: %s", state.IP(), zone, err)
@@ -69,7 +69,10 @@ func (f File) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (i
 		return dns.RcodeSuccess, nil
 	}
 
-	if z.Expired != nil && *z.Expired {
+	z.RLock()
+	exp := z.Expired
+	z.RUnlock()
+	if exp {
 		log.Errorf("Zone %s is expired", zone)
 		return dns.RcodeServerFailure, nil
 	}
@@ -112,14 +115,13 @@ type serialErr struct {
 }
 
 func (s *serialErr) Error() string {
-	return fmt.Sprintf("%s for origin %s in file %s, with serial %d", s.err, s.origin, s.zone, s.serial)
+	return fmt.Sprintf("%s for origin %s in file %s, with %d SOA serial", s.err, s.origin, s.zone, s.serial)
 }
 
 // Parse parses the zone in filename and returns a new Zone or an error.
 // If serial >= 0 it will reload the zone, if the SOA hasn't changed
 // it returns an error indicating nothing was read.
 func Parse(f io.Reader, origin, fileName string, serial int64) (*Zone, error) {
-
 	zp := dns.NewZoneParser(f, dns.Fqdn(origin), fileName)
 	zp.SetIncludeAllowed(true)
 	z := NewZone(origin, fileName)
@@ -129,12 +131,15 @@ func Parse(f io.Reader, origin, fileName string, serial int64) (*Zone, error) {
 			return nil, err
 		}
 
-		if !seenSOA && serial >= 0 {
+		if !seenSOA {
 			if s, ok := rr.(*dns.SOA); ok {
-				if s.Serial == uint32(serial) { // same serial
+				seenSOA = true
+
+				// -1 is valid serial is we failed to load the file on startup.
+
+				if serial >= 0 && s.Serial == uint32(serial) { // same serial
 					return nil, &serialErr{err: "no change in SOA serial", origin: origin, zone: fileName, serial: serial}
 				}
-				seenSOA = true
 			}
 		}
 
@@ -143,7 +148,7 @@ func Parse(f io.Reader, origin, fileName string, serial int64) (*Zone, error) {
 		}
 	}
 	if !seenSOA {
-		return nil, fmt.Errorf("file %q has no SOA record", fileName)
+		return nil, fmt.Errorf("file %q has no SOA record for origin %s", fileName, origin)
 	}
 
 	return z, nil

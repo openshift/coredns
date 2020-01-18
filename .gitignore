@@ -13,3 +13,6 @@ coverage.txt
 .classpath
 .project
 .settings/**
+build/
+release/
+vendor/

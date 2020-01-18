@@ -1,10 +1,9 @@
 package sarama
 
-//Resource holds information about acl resource type
 type Resource struct {
-	ResourceType        AclResourceType
-	ResourceName        string
-	ResourcePatternType AclResourcePatternType
+	ResourceType       AclResourceType
+	ResourceName       string
+	ResoucePatternType AclResourcePatternType
 }
 
 func (r *Resource) encode(pe packetEncoder, version int16) error {
@@ -15,11 +14,11 @@ func (r *Resource) encode(pe packetEncoder, version int16) error {
 	}
 
 	if version == 1 {
-		if r.ResourcePatternType == AclPatternUnknown {
+		if r.ResoucePatternType == AclPatternUnknown {
 			Logger.Print("Cannot encode an unknown resource pattern type, using Literal instead")
-			r.ResourcePatternType = AclPatternLiteral
+			r.ResoucePatternType = AclPatternLiteral
 		}
-		pe.putInt8(int8(r.ResourcePatternType))
+		pe.putInt8(int8(r.ResoucePatternType))
 	}
 
 	return nil
@@ -40,13 +39,12 @@ func (r *Resource) decode(pd packetDecoder, version int16) (err error) {
 		if err != nil {
 			return err
 		}
-		r.ResourcePatternType = AclResourcePatternType(pattern)
+		r.ResoucePatternType = AclResourcePatternType(pattern)
 	}
 
 	return nil
 }
 
-//Acl holds information about acl type
 type Acl struct {
 	Principal      string
 	Host           string
@@ -93,7 +91,6 @@ func (a *Acl) decode(pd packetDecoder, version int16) (err error) {
 	return nil
 }
 
-//ResourceAcls is an acl resource type
 type ResourceAcls struct {
 	Resource
 	Acls []*Acl
