@@ -1,5 +1,7 @@
-# only add build artifacts concerning coredns - no editor related files
-coredns
+query.log
+Corefile
+*.swp
+^coredns$
 coredns.exe
 build/
 release/
