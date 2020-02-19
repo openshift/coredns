@@ -94,19 +94,17 @@ On each endpoint, the timeouts of the communication are set by default and autom
 
 ## Metrics
 
-If monitoring is enabled (via the *prometheus* directive) then the following metric are exported:
+If monitoring is enabled (via the *prometheus* plugin) then the following metric are exported:
 
 * `coredns_forward_request_duration_seconds{to}` - duration per upstream interaction.
 * `coredns_forward_request_count_total{to}` - query count per upstream.
-* `coredns_forward_response_rcode_total{to, rcode}` - count of RCODEs per upstream.
+* `coredns_forward_response_rcode_count_total{to, rcode}` - count of RCODEs per upstream.
 * `coredns_forward_healthcheck_failure_count_total{to}` - number of failed health checks per upstream.
 * `coredns_forward_healthcheck_broken_count_total{}` - counter of when all upstreams are unhealthy,
   and we are randomly (this always uses the `random` policy) spraying to an upstream.
-* `coredns_forward_socket_count_total{to}` - number of cached sockets per upstream.
 
-Where `to` is one of the upstream servers (**TO** from the config), `proto` is the protocol used by
-the incoming query ("tcp" or "udp"), and family the transport family ("1" for IPv4, and "2" for
-IPv6).
+Where `to` is one of the upstream servers (**TO** from the config), `rcode` is the returned RCODE
+from the upstream.
 
 ## Examples
 

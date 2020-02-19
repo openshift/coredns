@@ -15,9 +15,9 @@ import (
 	"github.com/coredns/coredns/request"
 
 	"github.com/coredns/coredns/plugin/pkg/upstream"
-	etcdcv3 "github.com/coreos/etcd/clientv3"
-	"github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/miekg/dns"
+	etcdcv3 "go.etcd.io/etcd/clientv3"
+	"go.etcd.io/etcd/mvcc/mvccpb"
 )
 
 const (
@@ -83,7 +83,7 @@ func (e *Etcd) Records(ctx context.Context, state request.Request, exact bool) (
 func (e *Etcd) get(ctx context.Context, path string, recursive bool) (*etcdcv3.GetResponse, error) {
 	ctx, cancel := context.WithTimeout(ctx, etcdTimeout)
 	defer cancel()
-	if recursive == true {
+	if recursive {
 		if !strings.HasSuffix(path, "/") {
 			path = path + "/"
 		}

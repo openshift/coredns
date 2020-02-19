@@ -9,8 +9,6 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
-
-	"github.com/miekg/dns"
 )
 
 type exactNameRule struct {
@@ -106,9 +104,7 @@ func (rule *regexNameRule) Rewrite(ctx context.Context, state request.Request) R
 	s := rule.Replacement
 	for groupIndex, groupValue := range regexGroups {
 		groupIndexStr := "{" + strconv.Itoa(groupIndex) + "}"
-		if strings.Contains(s, groupIndexStr) {
-			s = strings.Replace(s, groupIndexStr, groupValue, -1)
-		}
+		s = strings.Replace(s, groupIndexStr, groupValue, -1)
 	}
 	state.Req.Question[0].Name = s
 	return RewriteDone
@@ -199,7 +195,7 @@ func newNameRule(nextAction string, args ...string) (Rule, error) {
 				},
 			}, nil
 		default:
-			return nil, fmt.Errorf("A name rule supports only exact, prefix, suffix, substring, and regex name matching, received: %s", matchType)
+			return nil, fmt.Errorf("name rule supports only exact, prefix, suffix, substring, and regex name matching, received: %s", matchType)
 		}
 	}
 	if len(args) == 7 {
@@ -264,25 +260,9 @@ func (rule *substringNameRule) GetResponseRule() ResponseRule { return ResponseR
 // GetResponseRule return a rule to rewrite the response with.
 func (rule *regexNameRule) GetResponseRule() ResponseRule { return rule.ResponseRule }
 
-// validName returns true if s is valid domain name and shorter than 256 characters.
-func validName(s string) bool {
-	_, ok := dns.IsDomainName(s)
-	if !ok {
-		return false
-	}
-	if len(dns.Name(s).String()) > 255 {
-		return false
-	}
-
-	return true
-}
-
 // hasClosingDot return true if s has a closing dot at the end.
 func hasClosingDot(s string) bool {
-	if strings.HasSuffix(s, ".") {
-		return true
-	}
-	return false
+	return strings.HasSuffix(s, ".")
 }
 
 // getSubExprUsage return the number of subexpressions used in s.

@@ -43,11 +43,11 @@ type EndpointPort struct {
 // EndpointsKey return a string using for the index.
 func EndpointsKey(name, namespace string) string { return name + "." + namespace }
 
-// ToEndpoints converts an api.Service to a *Service.
-func ToEndpoints(obj interface{}) interface{} {
+// ToEndpoints converts an api.Endpoints to a *Endpoints.
+func ToEndpoints(obj interface{}) (*api.Endpoints, *Endpoints) {
 	end, ok := obj.(*api.Endpoints)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 
 	e := &Endpoints{
@@ -62,7 +62,7 @@ func ToEndpoints(obj interface{}) interface{} {
 			Addresses: make([]EndpointAddress, len(eps.Addresses)),
 		}
 		if len(eps.Ports) == 0 {
-			// Add sentinal if there are no ports.
+			// Add sentinel if there are no ports.
 			sub.Ports = []EndpointPort{{Port: -1}}
 		} else {
 			sub.Ports = make([]EndpointPort, len(eps.Ports))
@@ -93,9 +93,7 @@ func ToEndpoints(obj interface{}) interface{} {
 		}
 	}
 
-	*end = api.Endpoints{}
-
-	return e
+	return end, e
 }
 
 // CopyWithoutSubsets copies e, without the subsets.

@@ -14,7 +14,7 @@ all: coredns
 
 .PHONY: coredns
 coredns: $(CHECKS)
-	GO111MODULE=on CGO_ENABLED=$(CGO_ENABLED) $(SYSTEM) go build $(BUILDOPTS) -ldflags="-s -w -X github.com/coredns/coredns/coremain.GitCommit=$(GITCOMMIT)" -o $(BINARY)
+	CGO_ENABLED=$(CGO_ENABLED) $(SYSTEM) go build $(BUILDOPTS) -ldflags="-s -w -X github.com/coredns/coredns/coremain.GitCommit=$(GITCOMMIT)" -o $(BINARY)
 
 .PHONY: check
 check: presubmit core/plugin/zplugin.go core/dnsserver/zdirectives.go
@@ -22,35 +22,48 @@ check: presubmit core/plugin/zplugin.go core/dnsserver/zdirectives.go
 .PHONY: travis
 travis:
 ifeq ($(TEST_TYPE),core)
-	( cd request ; GO111MODULE=on go test -v -race ./... )
-	( cd core ; GO111MODULE=on go test -v -race  ./... )
-	( cd coremain ; GO111MODULE=on go test -v -race ./... )
+	( cd request; go test -race ./... )
+	( cd core; go test -race  ./... )
+	( cd coremain; go test -race ./... )
 endif
 ifeq ($(TEST_TYPE),integration)
-	( cd test ; GO111MODULE=on go test -v -race ./... )
+	( cd test; go test -race ./... )
 endif
 ifeq ($(TEST_TYPE),plugin)
-	( cd plugin ; GO111MODULE=on go test -v -race ./... )
+	( cd plugin; go test -race ./... )
 endif
 ifeq ($(TEST_TYPE),coverage)
 	for d in `go list ./... | grep -v vendor`; do \
 		t=$$(date +%s); \
-		GO111MODULE=on go test -i -coverprofile=cover.out -covermode=atomic $$d || exit 1; \
-		GO111MODULE=on go test -v -coverprofile=cover.out -covermode=atomic $$d || exit 1; \
-		echo "Coverage test $$d took $$(($$(date +%s)-t)) seconds"; \
+		go test -i -coverprofile=cover.out -covermode=atomic $$d || exit 1; \
+		go test -coverprofile=cover.out -covermode=atomic $$d || exit 1; \
 		if [ -f cover.out ]; then \
-			cat cover.out >> coverage.txt; \
-			rm cover.out; \
+			cat cover.out >> coverage.txt && rm cover.out; \
 		fi; \
 	done
 endif
+ifeq ($(TEST_TYPE),fuzzit)
+	# skip fuzzing for PR
+	if [ "$(TRAVIS_PULL_REQUEST)" = "false" ] || [ "$(FUZZIT_TYPE)" = "local-regression" ] ; then \
+		export GO111MODULE=off; \
+		go get -u github.com/dvyukov/go-fuzz/go-fuzz-build; \
+		go get -u -v .; \
+		cd ../../go-acme/lego && git checkout v2.5.0; \
+		cd ../../coredns/coredns; \
+		LIBFUZZER=YES $(MAKE) -f Makefile.fuzz all; \
+		$(MAKE) -sf Makefile.fuzz fuzzit; \
+		for i in `$(MAKE) -sf Makefile.fuzz echo`; do echo $$i; \
+			./fuzzit create job --type $(FUZZIT_TYPE) coredns/$$i ./$$i; \
+		done; \
+	fi;
+endif
 
 core/plugin/zplugin.go core/dnsserver/zdirectives.go: plugin.cfg
-	GO111MODULE=on go generate coredns.go
+	go generate coredns.go
 
 .PHONY: gen
 gen:
-	GO111MODULE=on go generate coredns.go
+	go generate coredns.go
 
 .PHONY: pb
 pb:
@@ -63,8 +76,15 @@ presubmit:
 
 .PHONY: clean
 clean:
-	GO111MODULE=on go clean
+	go clean
 	rm -f coredns
+
+.PHONY: dep-ensure
+dep-ensure:
+	dep version || go get -u github.com/golang/dep/cmd/dep
+	dep ensure -v
+	dep prune -v
+	find vendor -name '*_test.go' -delete
 
 .PHONY: test
 test: check
@@ -73,3 +93,4 @@ test: check
 	( cd coremain ; go test -v -race ./... )
 	( cd test ; go test -v -race ./... )
 	( cd plugin ; go test -v -race ./... )
+

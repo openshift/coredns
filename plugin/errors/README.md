@@ -2,7 +2,7 @@
 
 ## Name
 
-*errors* - enable error logging.
+*errors* - enables error logging.
 
 ## Description
 
@@ -38,10 +38,10 @@ For better performance, it's recommended to use the `^` or `$` metacharacters in
 
 ## Examples
 
-Use the *whoami* to respond to queries and Log errors to standard output.
+Use the *whoami* to respond to queries in the example.org domain and Log errors to standard output.
 
 ~~~ corefile
-. {
+example.org {
     whoami
     errors
 }

@@ -15,7 +15,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-// Cache is plugin that looks up responses in a cache and caches replies.
+// Cache is a plugin that looks up responses in a cache and caches replies.
 // It has a success and a denial of existence cache.
 type Cache struct {
 	Next  plugin.Handler
@@ -35,6 +35,8 @@ type Cache struct {
 	prefetch   int
 	duration   time.Duration
 	percentage int
+
+	staleUpTo time.Duration
 
 	// Testing.
 	now func() time.Time

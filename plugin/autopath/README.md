@@ -27,7 +27,7 @@ If a plugin implements the `AutoPather` interface then it can be used.
 
 ## Metrics
 
-If monitoring is enabled (via the *prometheus* directive) then the following metric is exported:
+If monitoring is enabled (via the *prometheus* plugin) then the following metric is exported:
 
 * `coredns_autopath_success_count_total{server}` - counter of successfully autopath-ed queries.
 
@@ -39,7 +39,7 @@ The `server` label is explained in the *metrics* plugin documentation.
 autopath my-resolv.conf
 ~~~
 
-Use `my-resolv.conf` as the file to get the search path from. This file only needs so have one line:
+Use `my-resolv.conf` as the file to get the search path from. This file only needs to have one line:
 `search domain1 domain2 ...`
 
 ~~~

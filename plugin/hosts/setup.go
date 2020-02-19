@@ -9,6 +9,7 @@ import (
 
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metrics"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 
 	"github.com/caddyserver/caddy"
@@ -16,17 +17,12 @@ import (
 
 var log = clog.NewWithPlugin("hosts")
 
-func init() {
-	caddy.RegisterPlugin("hosts", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("hosts", setup) }
 
 func periodicHostsUpdate(h *Hosts) chan bool {
 	parseChan := make(chan bool)
 
-	if h.options.reload == durationOf0s {
+	if h.options.reload == 0 {
 		return parseChan
 	}
 
@@ -57,6 +53,12 @@ func setup(c *caddy.Controller) error {
 		return nil
 	})
 
+	c.OnStartup(func() error {
+		metrics.MustRegister(c, hostsEntries)
+		metrics.MustRegister(c, hostsReloadTime)
+		return nil
+	})
+
 	c.OnShutdown(func() error {
 		close(parseChan)
 		return nil
@@ -73,13 +75,12 @@ func setup(c *caddy.Controller) error {
 func hostsParse(c *caddy.Controller) (Hosts, error) {
 	config := dnsserver.GetConfig(c)
 
-	options := newOptions()
-
 	h := Hosts{
 		Hostsfile: &Hostsfile{
 			path:    "/etc/hosts",
-			hmap:    newHostsMap(),
-			options: options,
+			hmap:    newMap(),
+			inline:  newMap(),
+			options: newOptions(),
 		},
 	}
 
@@ -129,7 +130,7 @@ func hostsParse(c *caddy.Controller) (Hosts, error) {
 			case "fallthrough":
 				h.Fall.SetZonesFromArgs(c.RemainingArgs())
 			case "no_reverse":
-				options.autoReverse = false
+				h.options.autoReverse = false
 			case "ttl":
 				remaining := c.RemainingArgs()
 				if len(remaining) < 1 {
@@ -142,7 +143,7 @@ func hostsParse(c *caddy.Controller) (Hosts, error) {
 				if ttl <= 0 || ttl > 65535 {
 					return h, c.Errf("ttl provided is invalid")
 				}
-				options.ttl = uint32(ttl)
+				h.options.ttl = uint32(ttl)
 			case "reload":
 				remaining := c.RemainingArgs()
 				if len(remaining) != 1 {
@@ -152,10 +153,10 @@ func hostsParse(c *caddy.Controller) (Hosts, error) {
 				if err != nil {
 					return h, c.Errf("invalid duration for reload '%s'", remaining[0])
 				}
-				if reload < durationOf0s {
+				if reload < 0 {
 					return h, c.Errf("invalid negative duration for reload '%s'", remaining[0])
 				}
-				options.reload = reload
+				h.options.reload = reload
 			default:
 				if len(h.Fall.Zones) == 0 {
 					line := strings.Join(append([]string{c.Val()}, c.RemainingArgs()...), " ")

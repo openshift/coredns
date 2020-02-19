@@ -1,3 +1,8 @@
+// Unless explicitly stated otherwise all files in this repository are licensed
+// under the Apache License Version 2.0.
+// This product includes software developed at Datadog (https://www.datadoghq.com/).
+// Copyright 2016-2019 Datadog, Inc.
+
 package tracer
 
 import (
@@ -37,6 +42,9 @@ type payload struct {
 
 	// buf holds the sequence of msgpack-encoded items.
 	buf bytes.Buffer
+
+	// closed specifies the notification channel for each Close call.
+	closed chan struct{}
 }
 
 var _ io.Reader = (*payload)(nil)
@@ -46,6 +54,7 @@ func newPayload() *payload {
 	p := &payload{
 		header: make([]byte, 8),
 		off:    8,
+		closed: make(chan struct{}, 1),
 	}
 	return p
 }
@@ -76,6 +85,11 @@ func (p *payload) reset() {
 	p.off = 8
 	p.count = 0
 	p.buf.Reset()
+	select {
+	case <-p.closed:
+		// ensure there is room
+	default:
+	}
 }
 
 // https://github.com/msgpack/msgpack/blob/master/spec.md#array-format-family
@@ -103,6 +117,20 @@ func (p *payload) updateHeader() {
 		p.off = 3
 	}
 }
+
+// Close implements io.Closer
+func (p *payload) Close() error {
+	select {
+	case p.closed <- struct{}{}:
+	default:
+		// ignore subsequent Close calls
+	}
+	return nil
+}
+
+// waitClose blocks until the first Close call occurs since the payload
+// was constructed or the last reset happened.
+func (p *payload) waitClose() { <-p.closed }
 
 // Read implements io.Reader. It reads from the msgpack-encoded stream.
 func (p *payload) Read(b []byte) (n int, err error) {

@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/parse"
@@ -20,7 +20,7 @@ import (
 	"github.com/miekg/dns"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	// Pull this in for logtostderr flag parsing
+	// Pull this in setting klog's output to stdout
 	"k8s.io/klog"
 
 	// Excluding azure because it is failing to compile
@@ -35,26 +35,10 @@ import (
 
 var log = clog.NewWithPlugin("kubernetes")
 
-func init() {
-	// Kubernetes plugin uses the kubernetes library, which now uses klog, we must set and parse this flag
-	// so we don't log to the filesystem, which can fill up and crash CoreDNS indirectly by calling os.Exit().
-	// We also set: os.Stderr = os.Stdout in the setup function below so we output to standard out; as we do for
-	// all CoreDNS logging. We can't do *that* in the init function, because we, when starting, also barf some
-	// things to stderr.
-	klogFlags := flag.NewFlagSet("klog", flag.ExitOnError)
-	klog.InitFlags(klogFlags)
-	logtostderr := klogFlags.Lookup("logtostderr")
-	logtostderr.Value.Set("true")
-
-	caddy.RegisterPlugin("kubernetes", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("kubernetes", setup) }
 
 func setup(c *caddy.Controller) error {
-	// See comment in the init function.
-	os.Stderr = os.Stdout
+	klog.SetOutput(os.Stdout)
 
 	k, err := kubernetesParse(c)
 	if err != nil {
@@ -68,9 +52,20 @@ func setup(c *caddy.Controller) error {
 
 	k.RegisterKubeCache(c)
 
+	c.OnStartup(func() error {
+		metrics.MustRegister(c, DnsProgrammingLatency)
+		return nil
+	})
+
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		k.Next = next
 		return k
+	})
+
+	// get locally bound addresses
+	c.OnStartup(func() error {
+		k.localIPs = boundIPs(c)
+		return nil
 	})
 
 	return nil
@@ -125,13 +120,11 @@ func kubernetesParse(c *caddy.Controller) (*Kubernetes, error) {
 func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 
 	k8s := New([]string{""})
-	k8s.interfaceAddrsFunc = localPodIP
 	k8s.autoPathSearch = searchFromResolvConf()
 
 	opts := dnsControlOpts{
 		initEndpointsCache: true,
 		ignoreEmptyService: false,
-		resyncPeriod:       defaultResyncPeriod,
 	}
 	k8s.opts = opts
 
@@ -197,7 +190,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 		case "endpoint":
 			args := c.RemainingArgs()
 			if len(args) > 0 {
-				// Multiple endoints are deprecated but still could be specified,
+				// Multiple endpoints are deprecated but still could be specified,
 				// only the first one be used, though
 				k8s.APIServerList = args
 				if len(args) > 1 {
@@ -214,16 +207,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			}
 			return nil, c.ArgErr()
 		case "resyncperiod":
-			args := c.RemainingArgs()
-			if len(args) > 0 {
-				rp, err := time.ParseDuration(args[0])
-				if err != nil {
-					return nil, fmt.Errorf("unable to parse resync duration value: '%v': %v", args[0], err)
-				}
-				k8s.opts.resyncPeriod = rp
-				continue
-			}
-			return nil, c.ArgErr()
+			continue
 		case "labels":
 			args := c.RemainingArgs()
 			if len(args) > 0 {
@@ -322,5 +306,3 @@ func searchFromResolvConf() []string {
 	plugin.Zones(rc.Search).Normalize()
 	return rc.Search
 }
-
-const defaultResyncPeriod = 0

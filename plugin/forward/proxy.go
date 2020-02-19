@@ -12,11 +12,8 @@ import (
 // Proxy defines an upstream host.
 type Proxy struct {
 	fails uint32
+	addr  string
 
-	addr string
-
-	// Connection caching
-	expire    time.Duration
 	transport *Transport
 
 	// health checking
@@ -69,7 +66,7 @@ func (p *Proxy) Down(maxfails uint32) bool {
 }
 
 // close stops the health checking goroutine.
-func (p *Proxy) close()     { p.probe.Stop() }
+func (p *Proxy) stop()      { p.probe.Stop() }
 func (p *Proxy) finalizer() { p.transport.Stop() }
 
 // start starts the proxy's healthchecking.
@@ -80,6 +77,5 @@ func (p *Proxy) start(duration time.Duration) {
 
 const (
 	maxTimeout = 2 * time.Second
-	minTimeout = 200 * time.Millisecond
 	hcInterval = 500 * time.Millisecond
 )

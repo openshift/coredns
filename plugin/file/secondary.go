@@ -51,11 +51,11 @@ Transfer:
 		return Err
 	}
 
-	z.apexMu.Lock()
+	z.Lock()
 	z.Tree = z1.Tree
 	z.Apex = z1.Apex
-	*z.Expired = false
-	z.apexMu.Unlock()
+	z.Expired = false
+	z.Unlock()
 	log.Infof("Transferred: %s from %s", z.origin, tr)
 	return nil
 }
@@ -129,7 +129,7 @@ Restart:
 			if !retryActive {
 				break
 			}
-			*z.Expired = true
+			z.Expired = true
 
 		case <-retryTicker.C:
 			if !retryActive {

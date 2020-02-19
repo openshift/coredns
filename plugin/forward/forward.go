@@ -89,7 +89,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			if fails < len(f.proxies) {
 				continue
 			}
-			// All upstream proxies are dead, assume healtcheck is completely broken and randomly
+			// All upstream proxies are dead, assume healthcheck is completely broken and randomly
 			// select an upstream to connect to.
 			r := new(random)
 			proxy = r.List(f.proxies)[0]
@@ -109,14 +109,11 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		opts := f.opts
 		for {
 			ret, err = proxy.Connect(ctx, state, opts)
-			if err == nil {
-				break
-			}
 			if err == ErrCachedClosed { // Remote side closed conn, can only happen with TCP.
 				continue
 			}
 			// Retry with TCP if truncated and prefer_udp configured.
-			if ret != nil && ret.Truncated && !opts.forceTCP && f.opts.preferUDP {
+			if ret != nil && ret.Truncated && !opts.forceTCP && opts.preferUDP {
 				opts.forceTCP = true
 				continue
 			}
@@ -200,15 +197,6 @@ var (
 	ErrNoForward = errors.New("no forwarder defined")
 	// ErrCachedClosed means cached connection was closed by peer.
 	ErrCachedClosed = errors.New("cached connection was closed by peer")
-)
-
-// policy tells forward what policy for selecting upstream it uses.
-type policy int
-
-const (
-	randomPolicy policy = iota
-	roundRobinPolicy
-	sequentialPolicy
 )
 
 // options holds various options that can be set.

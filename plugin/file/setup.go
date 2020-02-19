@@ -13,12 +13,7 @@ import (
 	"github.com/caddyserver/caddy"
 )
 
-func init() {
-	caddy.RegisterPlugin("file", caddy.Plugin{
-		ServerType: "dns",
-		Action:     setup,
-	})
-}
+func init() { plugin.Register("file", setup) }
 
 func setup(c *caddy.Controller) error {
 	zones, err := fileParse(c)
@@ -57,6 +52,9 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 
 	config := dnsserver.GetConfig(c)
 
+	var openErr error
+	reload := 1 * time.Minute
+
 	for c.Next() {
 		// file db.file [zones...]
 		if !c.NextArg() {
@@ -77,23 +75,24 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 
 		reader, err := os.Open(fileName)
 		if err != nil {
-			// bail out
-			return Zones{}, err
+			openErr = err
 		}
 
 		for i := range origins {
 			origins[i] = plugin.Host(origins[i]).Normalize()
-			zone, err := Parse(reader, origins[i], fileName, 0)
-			if err == nil {
-				z[origins[i]] = zone
-			} else {
-				return Zones{}, err
+			z[origins[i]] = NewZone(origins[i], fileName)
+			if openErr == nil {
+				reader.Seek(0, 0)
+				zone, err := Parse(reader, origins[i], fileName, 0)
+				if err == nil {
+					z[origins[i]] = zone
+				} else {
+					return Zones{}, err
+				}
 			}
 			names = append(names, origins[i])
 		}
 
-		reload := 1 * time.Minute
-		upstr := upstream.New()
 		t := []string{}
 		var e error
 
@@ -124,10 +123,22 @@ func fileParse(c *caddy.Controller) (Zones, error) {
 				if t != nil {
 					z[origin].TransferTo = append(z[origin].TransferTo, t...)
 				}
-				z[origin].ReloadInterval = reload
-				z[origin].Upstream = upstr
 			}
 		}
+	}
+
+	for origin := range z {
+		z[origin].ReloadInterval = reload
+		z[origin].Upstream = upstream.New()
+	}
+
+	if openErr != nil {
+		if reload == 0 {
+			// reload hasn't been set make this a fatal error
+			return Zones{}, plugin.Error("file", openErr)
+		}
+		log.Warningf("Failed to open %q: trying again in %s", openErr, reload)
+
 	}
 	return Zones{Z: z, Names: names}, nil
 }

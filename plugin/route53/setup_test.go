@@ -9,7 +9,7 @@ import (
 )
 
 func TestSetupRoute53(t *testing.T) {
-	f := func(credential *credentials.Credentials) route53iface.Route53API {
+	f = func(credential *credentials.Credentials) route53iface.Route53API {
 		return fakeRoute53{}
 	}
 
@@ -51,13 +51,29 @@ func TestSetupRoute53(t *testing.T) {
 		{`route53 example.org:12345678 example.org:12345678 {
 	}`, true},
 
+		{`route53 example.org:12345678 {
+	refresh 90
+}`, false},
+		{`route53 example.org:12345678 {
+	refresh 5m
+}`, false},
+		{`route53 example.org:12345678 {
+	refresh
+}`, true},
+		{`route53 example.org:12345678 {
+	refresh foo
+}`, true},
+		{`route53 example.org:12345678 {
+	refresh -1m
+}`, true},
+
 		{`route53 example.org {
 	}`, true},
 	}
 
 	for _, test := range tests {
 		c := caddy.NewTestController("dns", test.body)
-		if err := setup(c, f); (err == nil) == test.expectedError {
+		if err := setup(c); (err == nil) == test.expectedError {
 			t.Errorf("Unexpected errors: %v", err)
 		}
 	}
