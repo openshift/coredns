@@ -170,7 +170,7 @@ github.com/mitchellh/go-homedir
 github.com/modern-go/concurrent
 # github.com/modern-go/reflect2 v1.0.1
 github.com/modern-go/reflect2
-# github.com/openshift/coredns-mdns v0.0.0-20200122115902-259b209eea6a
+# github.com/openshift/coredns-mdns v0.0.0-20200220182154-b0f03279ed06
 github.com/openshift/coredns-mdns
 # github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492
 github.com/opentracing-contrib/go-observer
