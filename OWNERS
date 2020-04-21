@@ -5,6 +5,8 @@ approvers:
   - danehans
   - Miciah
 
+component: DNS
+
 features:
   - comments
   - reviewers
