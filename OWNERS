@@ -21,3 +21,6 @@ aliases:
     /wai -> /label add: works as intended
   - |
     /release: (.*) -> /exec: /opt/bin/release-coredns $1
+
+components: "DNS"
+
