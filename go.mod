@@ -8,7 +8,6 @@ require (
 	github.com/Azure/go-autorest/autorest/azure/auth v0.4.1
 	github.com/aws/aws-sdk-go v1.25.48
 	github.com/caddyserver/caddy v1.0.4
-	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
 	github.com/coredns/federation v0.0.0-20190818181423-e032b096babe
 	github.com/dnstap/golang-dnstap v0.0.0-20170829151710-2cf77a2b5e11
 	github.com/farsightsec/golang-framestream v0.0.0-20181102145529-8a0cb8ba8710
@@ -17,7 +16,7 @@ require (
 	github.com/infobloxopen/go-trees v0.0.0-20190313150506-2af4e13f9062
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/miekg/dns v1.1.25
-	github.com/openshift/coredns-mdns v0.0.0-20200302154045-ff66ed9a4619
+	github.com/openshift/coredns-mdns v0.0.0-20200618154045-db984b5fbbb6
 	github.com/opentracing/opentracing-go v1.1.0
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.3.5
 	github.com/prometheus/client_golang v1.2.1
