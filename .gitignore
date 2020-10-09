@@ -1,8 +1,7 @@
 query.log
 Corefile
 *.swp
-^coredns$
+/coredns
 coredns.exe
 build/
 release/
-vendor/
