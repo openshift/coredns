@@ -4,8 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/coredns/caddy"
-
+	"github.com/caddyserver/caddy"
 	"google.golang.org/api/option"
 )
 

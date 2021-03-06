@@ -4,27 +4,26 @@ import (
 	"github.com/coredns/coredns/plugin"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 // Request* and Response* are the prometheus counters and gauges we are using for exporting metrics.
 var (
-	RequestCount = promauto.NewCounterVec(prometheus.CounterOpts{
+	RequestCount = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
-		Name:      "requests_total",
+		Name:      "request_count_total",
 		Help:      "Counter of DNS requests made per zone, protocol and family.",
-	}, []string{"server", "zone", "proto", "family", "type"})
+	}, []string{"server", "zone", "proto", "family"})
 
-	RequestDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	RequestDuration = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
 		Name:      "request_duration_seconds",
 		Buckets:   plugin.TimeBuckets,
 		Help:      "Histogram of the time (in seconds) each request took.",
-	}, []string{"server", "zone", "type"})
+	}, []string{"server", "zone"})
 
-	RequestSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	RequestSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
 		Name:      "request_size_bytes",
@@ -32,14 +31,21 @@ var (
 		Buckets:   []float64{0, 100, 200, 300, 400, 511, 1023, 2047, 4095, 8291, 16e3, 32e3, 48e3, 64e3},
 	}, []string{"server", "zone", "proto"})
 
-	RequestDo = promauto.NewCounterVec(prometheus.CounterOpts{
+	RequestDo = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
-		Name:      "do_requests_total",
+		Name:      "request_do_count_total",
 		Help:      "Counter of DNS requests with DO bit set per zone.",
 	}, []string{"server", "zone"})
 
-	ResponseSize = promauto.NewHistogramVec(prometheus.HistogramOpts{
+	RequestType = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: subsystem,
+		Name:      "request_type_count_total",
+		Help:      "Counter of DNS requests per type, per zone.",
+	}, []string{"server", "zone", "type"})
+
+	ResponseSize = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
 		Name:      "response_size_bytes",
@@ -47,20 +53,20 @@ var (
 		Buckets:   []float64{0, 100, 200, 300, 400, 511, 1023, 2047, 4095, 8291, 16e3, 32e3, 48e3, 64e3},
 	}, []string{"server", "zone", "proto"})
 
-	ResponseRcode = promauto.NewCounterVec(prometheus.CounterOpts{
+	ResponseRcode = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
 		Subsystem: subsystem,
-		Name:      "responses_total",
+		Name:      "response_rcode_count_total",
 		Help:      "Counter of response status codes.",
 	}, []string{"server", "zone", "rcode"})
 
-	Panic = promauto.NewCounter(prometheus.CounterOpts{
+	Panic = prometheus.NewCounter(prometheus.CounterOpts{
 		Namespace: plugin.Namespace,
-		Name:      "panics_total",
+		Name:      "panic_count_total",
 		Help:      "A metrics that counts the number of panics.",
 	})
 
-	PluginEnabled = promauto.NewGaugeVec(prometheus.GaugeOpts{
+	PluginEnabled = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: plugin.Namespace,
 		Name:      "plugin_enabled",
 		Help:      "A metric that indicates whether a plugin is enabled on per server and zone basis.",

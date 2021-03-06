@@ -87,11 +87,11 @@ func (h *Route53) Run(ctx context.Context) error {
 		for {
 			select {
 			case <-ctx.Done():
-				log.Debugf("Breaking out of Route53 update loop for %v: %v", h.zoneNames, ctx.Err())
+				log.Infof("Breaking out of Route53 update loop: %v", ctx.Err())
 				return
 			case <-time.After(h.refresh):
 				if err := h.updateZones(ctx); err != nil && ctx.Err() == nil /* Don't log error if ctx expired. */ {
-					log.Errorf("Failed to update zones %v: %v", h.zoneNames, err)
+					log.Errorf("Failed to update zones: %v", err)
 				}
 			}
 		}
@@ -148,7 +148,7 @@ func (h *Route53) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	return dns.RcodeSuccess, nil
 }
 
-const escapeSeq = "\\"
+const escapeSeq = `\\`
 
 // maybeUnescape parses s and converts escaped ASCII codepoints (in octal) back
 // to its ASCII representation.

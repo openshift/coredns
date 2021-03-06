@@ -10,8 +10,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
+
+	"github.com/caddyserver/caddy"
 )
 
 func init() {

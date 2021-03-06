@@ -4,12 +4,12 @@ import (
 	"context"
 	"testing"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
 	"github.com/coredns/coredns/plugin/test"
 	"github.com/coredns/coredns/request"
 
+	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 	"github.com/opentracing/opentracing-go/mocktracer"
 )
@@ -79,21 +79,14 @@ func TestTrace(t *testing.T) {
 
 			rootSpan := fs[1]
 			req := request.Request{W: w, Req: tc.question}
-			if rootSpan.OperationName != defaultTopLevelSpanName {
-				t.Errorf("Unexpected span name: rootSpan.Name: want %v, got %v", defaultTopLevelSpanName, rootSpan.OperationName)
+			if rootSpan.OperationName != spanName(ctx, req) {
+				t.Errorf("Unexpected span name: rootSpan.Name: want %v, got %v", spanName(ctx, req), rootSpan.OperationName)
 			}
-
 			if rootSpan.Tag(tagName) != req.Name() {
 				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", tagName, req.Name(), rootSpan.Tag(tagName))
 			}
 			if rootSpan.Tag(tagType) != req.Type() {
 				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", tagType, req.Type(), rootSpan.Tag(tagType))
-			}
-			if rootSpan.Tag(tagProto) != req.Proto() {
-				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", tagProto, req.Proto(), rootSpan.Tag(tagProto))
-			}
-			if rootSpan.Tag(tagRemote) != req.IP() {
-				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", tagRemote, req.IP(), rootSpan.Tag(tagRemote))
 			}
 			if rootSpan.Tag(tagRcode) != rcode.ToString(tc.rcode) {
 				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", tagRcode, rcode.ToString(tc.rcode), rootSpan.Tag(tagRcode))

@@ -1,6 +1,6 @@
 // Package deprecated is used when we deprecated plugin. In plugin.cfg just go from
 //
-// startup:github.com/coredns/caddy/startupshutdown
+// startup:github.com/caddyserver/caddy/startupshutdown
 //
 // To:
 //
@@ -14,8 +14,9 @@ package deprecated
 import (
 	"errors"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
+
+	"github.com/caddyserver/caddy"
 )
 
 // removed has the names of the plugins that need to error on startup.

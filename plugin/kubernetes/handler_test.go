@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
@@ -263,7 +264,7 @@ var dnsTestCases = []test.Case{
 		Qname: "dns-version.cluster.local.", Qtype: dns.TypeTXT,
 		Rcode: dns.RcodeSuccess,
 		Answer: []dns.RR{
-			test.TXT("dns-version.cluster.local 28800 IN TXT 1.1.0"),
+			test.TXT("dns-version.cluster.local 28800 IN TXT 1.0.1"),
 		},
 	},
 	// A Service (Headless) does not exist
@@ -370,30 +371,6 @@ var dnsTestCases = []test.Case{
 		Rcode: dns.RcodeNameError,
 		Ns: []dns.RR{
 			test.SOA("cluster.local.	5	IN	SOA	ns.dns.cluster.local. hostmaster.cluster.local. 1499347823 7200 1800 86400 5"),
-		},
-	},
-	// Dual Stack ClusterIP Services
-	{
-		Qname: "svc-dual-stack.testns.svc.cluster.local.", Qtype: dns.TypeA,
-		Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
-			test.A("svc-dual-stack.testns.svc.cluster.local.	5	IN	A	10.0.0.3"),
-		},
-	},
-	{
-		Qname: "svc-dual-stack.testns.svc.cluster.local.", Qtype: dns.TypeAAAA,
-		Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{
-			test.AAAA("svc-dual-stack.testns.svc.cluster.local.	5	IN	AAAA	10::3"),
-		},
-	},
-	{
-		Qname: "svc-dual-stack.testns.svc.cluster.local.", Qtype: dns.TypeSRV,
-		Rcode: dns.RcodeSuccess,
-		Answer: []dns.RR{test.SRV("svc-dual-stack.testns.svc.cluster.local.	5	IN	SRV	0 50 80 svc-dual-stack.testns.svc.cluster.local.")},
-		Extra: []dns.RR{
-			test.A("svc-dual-stack.testns.svc.cluster.local.  5       IN      A       10.0.0.3"),
-			test.AAAA("svc-dual-stack.testns.svc.cluster.local.  5       IN      AAAA       10::3"),
 		},
 	},
 }
@@ -548,7 +525,7 @@ func (APIConnServeTest) Run()                                      {}
 func (APIConnServeTest) Stop() error                               { return nil }
 func (APIConnServeTest) EpIndexReverse(string) []*object.Endpoints { return nil }
 func (APIConnServeTest) SvcIndexReverse(string) []*object.Service  { return nil }
-func (APIConnServeTest) Modified() int64                           { return int64(3) }
+func (APIConnServeTest) Modified() int64                           { return time.Now().Unix() }
 
 func (APIConnServeTest) PodIndex(ip string) []*object.Pod {
 	if ip != "10.240.0.1" {
@@ -563,10 +540,10 @@ func (APIConnServeTest) PodIndex(ip string) []*object.Pod {
 var svcIndex = map[string][]*object.Service{
 	"svc1.testns": {
 		{
-			Name:       "svc1",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{"10.0.0.1"},
+			Name:      "svc1",
+			Namespace: "testns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: "10.0.0.1",
 			Ports: []api.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
@@ -574,10 +551,10 @@ var svcIndex = map[string][]*object.Service{
 	},
 	"svcempty.testns": {
 		{
-			Name:       "svcempty",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{"10.0.0.1"},
+			Name:      "svcempty",
+			Namespace: "testns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: "10.0.0.1",
 			Ports: []api.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
@@ -585,10 +562,10 @@ var svcIndex = map[string][]*object.Service{
 	},
 	"svc6.testns": {
 		{
-			Name:       "svc6",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{"1234:abcd::1"},
+			Name:      "svc6",
+			Namespace: "testns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: "1234:abcd::1",
 			Ports: []api.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
@@ -596,10 +573,10 @@ var svcIndex = map[string][]*object.Service{
 	},
 	"hdls1.testns": {
 		{
-			Name:       "hdls1",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{api.ClusterIPNone},
+			Name:      "hdls1",
+			Namespace: "testns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: api.ClusterIPNone,
 		},
 	},
 	"external.testns": {
@@ -626,29 +603,19 @@ var svcIndex = map[string][]*object.Service{
 	},
 	"hdlsprtls.testns": {
 		{
-			Name:       "hdlsprtls",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{api.ClusterIPNone},
+			Name:      "hdlsprtls",
+			Namespace: "testns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: api.ClusterIPNone,
 		},
 	},
 	"svc1.unexposedns": {
 		{
-			Name:       "svc1",
-			Namespace:  "unexposedns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{"10.0.0.2"},
+			Name:      "svc1",
+			Namespace: "unexposedns",
+			Type:      api.ServiceTypeClusterIP,
+			ClusterIP: "10.0.0.2",
 			Ports: []api.ServicePort{
-				{Name: "http", Protocol: "tcp", Port: 80},
-			},
-		},
-	},
-	"svc-dual-stack.testns": {
-		{
-			Name:       "svc-dual-stack",
-			Namespace:  "testns",
-			Type:       api.ServiceTypeClusterIP,
-			ClusterIPs: []string{"10.0.0.3", "10::3"}, Ports: []api.ServicePort{
 				{Name: "http", Protocol: "tcp", Port: 80},
 			},
 		},
@@ -677,9 +644,8 @@ var epsIndex = map[string][]*object.Endpoints{
 				},
 			},
 		},
-		Name:      "svc1-slice1",
+		Name:      "svc1",
 		Namespace: "testns",
-		Index:     object.EndpointsKey("svc1", "testns"),
 	}},
 	"svcempty.testns": {{
 		Subsets: []object.EndpointSubset{
@@ -690,9 +656,8 @@ var epsIndex = map[string][]*object.Endpoints{
 				},
 			},
 		},
-		Name:      "svcempty-slice1",
+		Name:      "svcempty",
 		Namespace: "testns",
-		Index:     object.EndpointsKey("svcempty", "testns"),
 	}},
 	"hdls1.testns": {{
 		Subsets: []object.EndpointSubset{
@@ -710,9 +675,8 @@ var epsIndex = map[string][]*object.Endpoints{
 				},
 			},
 		},
-		Name:      "hdls1-slice1",
+		Name:      "hdls1",
 		Namespace: "testns",
-		Index:     object.EndpointsKey("hdls1", "testns"),
 	}},
 	"hdlsprtls.testns": {{
 		Subsets: []object.EndpointSubset{
@@ -723,9 +687,8 @@ var epsIndex = map[string][]*object.Endpoints{
 				Ports: []object.EndpointPort{{Port: -1}},
 			},
 		},
-		Name:      "hdlsprtls-slice1",
+		Name:      "hdlsprtls",
 		Namespace: "testns",
-		Index:     object.EndpointsKey("hdlsprtls", "testns"),
 	}},
 }
 

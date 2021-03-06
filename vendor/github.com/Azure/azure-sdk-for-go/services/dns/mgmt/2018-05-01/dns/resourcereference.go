@@ -35,9 +35,7 @@ func NewResourceReferenceClient(subscriptionID string) ResourceReferenceClient {
 	return NewResourceReferenceClientWithBaseURI(DefaultBaseURI, subscriptionID)
 }
 
-// NewResourceReferenceClientWithBaseURI creates an instance of the ResourceReferenceClient client using a custom
-// endpoint.  Use this when interacting with an Azure cloud that uses a non-standard base URI (sovereign clouds, Azure
-// stack).
+// NewResourceReferenceClientWithBaseURI creates an instance of the ResourceReferenceClient client.
 func NewResourceReferenceClientWithBaseURI(baseURI string, subscriptionID string) ResourceReferenceClient {
 	return ResourceReferenceClient{NewWithBaseURI(baseURI, subscriptionID)}
 }
@@ -101,7 +99,8 @@ func (client ResourceReferenceClient) GetByTargetResourcesPreparer(ctx context.C
 // GetByTargetResourcesSender sends the GetByTargetResources request. The method will close the
 // http.Response Body if it receives an error.
 func (client ResourceReferenceClient) GetByTargetResourcesSender(req *http.Request) (*http.Response, error) {
-	return client.Send(req, azure.DoRetryWithRegistration(client.Client))
+	sd := autorest.GetSendDecorators(req.Context(), azure.DoRetryWithRegistration(client.Client))
+	return autorest.SendWithSender(client, req, sd...)
 }
 
 // GetByTargetResourcesResponder handles the response to the GetByTargetResources request. The method always

@@ -4,13 +4,13 @@ import (
 	"context"
 	"strings"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/upstream"
 
+	"github.com/caddyserver/caddy"
 	gcp "google.golang.org/api/dns/v1"
 	"google.golang.org/api/option"
 )
@@ -46,14 +46,14 @@ func setup(c *caddy.Controller) error {
 		for i := 0; i < len(args); i++ {
 			parts := strings.SplitN(args[i], ":", 3)
 			if len(parts) != 3 {
-				return plugin.Error("clouddns", c.Errf("invalid zone %q", args[i]))
+				return c.Errf("invalid zone '%s'", args[i])
 			}
 			dnsName, projectName, hostedZone := parts[0], parts[1], parts[2]
 			if dnsName == "" || projectName == "" || hostedZone == "" {
-				return plugin.Error("clouddns", c.Errf("invalid zone %q", args[i]))
+				return c.Errf("invalid zone '%s'", args[i])
 			}
 			if _, ok := keyPairs[args[i]]; ok {
-				return plugin.Error("clouddns", c.Errf("conflict zone %q", args[i]))
+				return c.Errf("conflict zone '%s'", args[i])
 			}
 
 			keyPairs[args[i]] = struct{}{}
@@ -64,21 +64,22 @@ func setup(c *caddy.Controller) error {
 		for c.NextBlock() {
 			switch c.Val() {
 			case "upstream":
-				c.RemainingArgs()
+				c.RemainingArgs() // eats args
+			// if filepath is provided in the Corefile use it to authenticate the dns client
 			case "credentials":
 				if c.NextArg() {
 					opt = option.WithCredentialsFile(c.Val())
 				} else {
-					return plugin.Error("clouddns", c.ArgErr())
+					return c.ArgErr()
 				}
 			case "fallthrough":
 				fall.SetZonesFromArgs(c.RemainingArgs())
 			default:
-				return plugin.Error("clouddns", c.Errf("unknown property %q", c.Val()))
+				return c.Errf("unknown property '%s'", c.Val())
 			}
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx := context.Background()
 		client, err := f(ctx, opt)
 		if err != nil {
 			return err
@@ -86,19 +87,18 @@ func setup(c *caddy.Controller) error {
 
 		h, err := New(ctx, client, keys, up)
 		if err != nil {
-			return plugin.Error("clouddns", c.Errf("failed to create plugin: %v", err))
+			return c.Errf("failed to create Cloud DNS plugin: %v", err)
 		}
 		h.Fall = fall
 
 		if err := h.Run(ctx); err != nil {
-			return plugin.Error("clouddns", c.Errf("failed to initialize plugin: %v", err))
+			return c.Errf("failed to initialize Cloud DNS plugin: %v", err)
 		}
 
 		dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 			h.Next = next
 			return h
 		})
-		c.OnShutdown(func() error { cancel(); return nil })
 	}
 
 	return nil

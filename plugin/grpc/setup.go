@@ -4,11 +4,13 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/parse"
 	pkgtls "github.com/coredns/coredns/plugin/pkg/tls"
+
+	"github.com/caddyserver/caddy"
 )
 
 func init() { plugin.Register("grpc", setup) }
@@ -26,6 +28,11 @@ func setup(c *caddy.Controller) error {
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		g.Next = next // Set the Next field, so the plugin chaining works.
 		return g
+	})
+
+	c.OnStartup(func() error {
+		metrics.MustRegister(c, RequestCount, RcodeCount, RequestDuration)
+		return nil
 	})
 
 	return nil

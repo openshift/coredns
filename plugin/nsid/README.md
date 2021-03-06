@@ -52,6 +52,6 @@ And now a client with NSID support will see an OPT record with the NSID option:
 ;whoami.example.org.		IN	A
 ~~~
 
-## See Also
+## Also See
 
 [RFC 5001](https://tools.ietf.org/html/rfc5001)

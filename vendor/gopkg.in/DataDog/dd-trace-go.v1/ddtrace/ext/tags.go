@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016-2019 Datadog, Inc.
 
 // Package ext contains a set of Datadog-specific constants. Most of them are used
 // for setting span metadata.
@@ -32,6 +32,10 @@ const (
 	// HTTPURL sets the HTTP URL for a span.
 	HTTPURL = "http.url"
 
+	// TODO: In the next major version, prefix these constants (SpanType, etc)
+	// with "Key*" (KeySpanType, etc) to more easily differentiate between
+	// constants representing tag values and constants representing keys.
+
 	// SpanName is a pseudo-key for setting a span's operation name by means of
 	// a tag. It is mostly here to facilitate vendor-agnostic frameworks like Opentracing
 	// and OpenCensus.
@@ -42,9 +46,6 @@ const (
 
 	// ServiceName defines the Service name for this Span.
 	ServiceName = "service.name"
-
-	// Version is a tag that specifies the current application version.
-	Version = "version"
 
 	// ResourceName defines the Resource name for the Span.
 	ResourceName = "resource.name"
@@ -82,7 +83,4 @@ const (
 	// ManualDrop is a tag which specifies that the trace to which this span
 	// belongs to should be dropped when set to true.
 	ManualDrop = "manual.drop"
-
-	// RuntimeID is a tag that contains a unique id for this process.
-	RuntimeID = "runtime-id"
 )

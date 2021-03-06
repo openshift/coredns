@@ -26,7 +26,7 @@ import (
 //    // myFunc uses an SDK service client to make a request to
 //    // Amazon Route 53.
 //    func myFunc(svc route53iface.Route53API) bool {
-//        // Make svc.ActivateKeySigningKey request
+//        // Make svc.AssociateVPCWithHostedZone request
 //    }
 //
 //    func main() {
@@ -42,7 +42,7 @@ import (
 //    type mockRoute53Client struct {
 //        route53iface.Route53API
 //    }
-//    func (m *mockRoute53Client) ActivateKeySigningKey(input *route53.ActivateKeySigningKeyInput) (*route53.ActivateKeySigningKeyOutput, error) {
+//    func (m *mockRoute53Client) AssociateVPCWithHostedZone(input *route53.AssociateVPCWithHostedZoneInput) (*route53.AssociateVPCWithHostedZoneOutput, error) {
 //        // mock response/functionality
 //    }
 //
@@ -60,10 +60,6 @@ import (
 // and waiters. Its suggested to use the pattern above for testing, or using
 // tooling to generate mocks to satisfy the interfaces.
 type Route53API interface {
-	ActivateKeySigningKey(*route53.ActivateKeySigningKeyInput) (*route53.ActivateKeySigningKeyOutput, error)
-	ActivateKeySigningKeyWithContext(aws.Context, *route53.ActivateKeySigningKeyInput, ...request.Option) (*route53.ActivateKeySigningKeyOutput, error)
-	ActivateKeySigningKeyRequest(*route53.ActivateKeySigningKeyInput) (*request.Request, *route53.ActivateKeySigningKeyOutput)
-
 	AssociateVPCWithHostedZone(*route53.AssociateVPCWithHostedZoneInput) (*route53.AssociateVPCWithHostedZoneOutput, error)
 	AssociateVPCWithHostedZoneWithContext(aws.Context, *route53.AssociateVPCWithHostedZoneInput, ...request.Option) (*route53.AssociateVPCWithHostedZoneOutput, error)
 	AssociateVPCWithHostedZoneRequest(*route53.AssociateVPCWithHostedZoneInput) (*request.Request, *route53.AssociateVPCWithHostedZoneOutput)
@@ -83,10 +79,6 @@ type Route53API interface {
 	CreateHostedZone(*route53.CreateHostedZoneInput) (*route53.CreateHostedZoneOutput, error)
 	CreateHostedZoneWithContext(aws.Context, *route53.CreateHostedZoneInput, ...request.Option) (*route53.CreateHostedZoneOutput, error)
 	CreateHostedZoneRequest(*route53.CreateHostedZoneInput) (*request.Request, *route53.CreateHostedZoneOutput)
-
-	CreateKeySigningKey(*route53.CreateKeySigningKeyInput) (*route53.CreateKeySigningKeyOutput, error)
-	CreateKeySigningKeyWithContext(aws.Context, *route53.CreateKeySigningKeyInput, ...request.Option) (*route53.CreateKeySigningKeyOutput, error)
-	CreateKeySigningKeyRequest(*route53.CreateKeySigningKeyInput) (*request.Request, *route53.CreateKeySigningKeyOutput)
 
 	CreateQueryLoggingConfig(*route53.CreateQueryLoggingConfigInput) (*route53.CreateQueryLoggingConfigOutput, error)
 	CreateQueryLoggingConfigWithContext(aws.Context, *route53.CreateQueryLoggingConfigInput, ...request.Option) (*route53.CreateQueryLoggingConfigOutput, error)
@@ -112,10 +104,6 @@ type Route53API interface {
 	CreateVPCAssociationAuthorizationWithContext(aws.Context, *route53.CreateVPCAssociationAuthorizationInput, ...request.Option) (*route53.CreateVPCAssociationAuthorizationOutput, error)
 	CreateVPCAssociationAuthorizationRequest(*route53.CreateVPCAssociationAuthorizationInput) (*request.Request, *route53.CreateVPCAssociationAuthorizationOutput)
 
-	DeactivateKeySigningKey(*route53.DeactivateKeySigningKeyInput) (*route53.DeactivateKeySigningKeyOutput, error)
-	DeactivateKeySigningKeyWithContext(aws.Context, *route53.DeactivateKeySigningKeyInput, ...request.Option) (*route53.DeactivateKeySigningKeyOutput, error)
-	DeactivateKeySigningKeyRequest(*route53.DeactivateKeySigningKeyInput) (*request.Request, *route53.DeactivateKeySigningKeyOutput)
-
 	DeleteHealthCheck(*route53.DeleteHealthCheckInput) (*route53.DeleteHealthCheckOutput, error)
 	DeleteHealthCheckWithContext(aws.Context, *route53.DeleteHealthCheckInput, ...request.Option) (*route53.DeleteHealthCheckOutput, error)
 	DeleteHealthCheckRequest(*route53.DeleteHealthCheckInput) (*request.Request, *route53.DeleteHealthCheckOutput)
@@ -123,10 +111,6 @@ type Route53API interface {
 	DeleteHostedZone(*route53.DeleteHostedZoneInput) (*route53.DeleteHostedZoneOutput, error)
 	DeleteHostedZoneWithContext(aws.Context, *route53.DeleteHostedZoneInput, ...request.Option) (*route53.DeleteHostedZoneOutput, error)
 	DeleteHostedZoneRequest(*route53.DeleteHostedZoneInput) (*request.Request, *route53.DeleteHostedZoneOutput)
-
-	DeleteKeySigningKey(*route53.DeleteKeySigningKeyInput) (*route53.DeleteKeySigningKeyOutput, error)
-	DeleteKeySigningKeyWithContext(aws.Context, *route53.DeleteKeySigningKeyInput, ...request.Option) (*route53.DeleteKeySigningKeyOutput, error)
-	DeleteKeySigningKeyRequest(*route53.DeleteKeySigningKeyInput) (*request.Request, *route53.DeleteKeySigningKeyOutput)
 
 	DeleteQueryLoggingConfig(*route53.DeleteQueryLoggingConfigInput) (*route53.DeleteQueryLoggingConfigOutput, error)
 	DeleteQueryLoggingConfigWithContext(aws.Context, *route53.DeleteQueryLoggingConfigInput, ...request.Option) (*route53.DeleteQueryLoggingConfigOutput, error)
@@ -148,17 +132,9 @@ type Route53API interface {
 	DeleteVPCAssociationAuthorizationWithContext(aws.Context, *route53.DeleteVPCAssociationAuthorizationInput, ...request.Option) (*route53.DeleteVPCAssociationAuthorizationOutput, error)
 	DeleteVPCAssociationAuthorizationRequest(*route53.DeleteVPCAssociationAuthorizationInput) (*request.Request, *route53.DeleteVPCAssociationAuthorizationOutput)
 
-	DisableHostedZoneDNSSEC(*route53.DisableHostedZoneDNSSECInput) (*route53.DisableHostedZoneDNSSECOutput, error)
-	DisableHostedZoneDNSSECWithContext(aws.Context, *route53.DisableHostedZoneDNSSECInput, ...request.Option) (*route53.DisableHostedZoneDNSSECOutput, error)
-	DisableHostedZoneDNSSECRequest(*route53.DisableHostedZoneDNSSECInput) (*request.Request, *route53.DisableHostedZoneDNSSECOutput)
-
 	DisassociateVPCFromHostedZone(*route53.DisassociateVPCFromHostedZoneInput) (*route53.DisassociateVPCFromHostedZoneOutput, error)
 	DisassociateVPCFromHostedZoneWithContext(aws.Context, *route53.DisassociateVPCFromHostedZoneInput, ...request.Option) (*route53.DisassociateVPCFromHostedZoneOutput, error)
 	DisassociateVPCFromHostedZoneRequest(*route53.DisassociateVPCFromHostedZoneInput) (*request.Request, *route53.DisassociateVPCFromHostedZoneOutput)
-
-	EnableHostedZoneDNSSEC(*route53.EnableHostedZoneDNSSECInput) (*route53.EnableHostedZoneDNSSECOutput, error)
-	EnableHostedZoneDNSSECWithContext(aws.Context, *route53.EnableHostedZoneDNSSECInput, ...request.Option) (*route53.EnableHostedZoneDNSSECOutput, error)
-	EnableHostedZoneDNSSECRequest(*route53.EnableHostedZoneDNSSECInput) (*request.Request, *route53.EnableHostedZoneDNSSECOutput)
 
 	GetAccountLimit(*route53.GetAccountLimitInput) (*route53.GetAccountLimitOutput, error)
 	GetAccountLimitWithContext(aws.Context, *route53.GetAccountLimitInput, ...request.Option) (*route53.GetAccountLimitOutput, error)
@@ -171,10 +147,6 @@ type Route53API interface {
 	GetCheckerIpRanges(*route53.GetCheckerIpRangesInput) (*route53.GetCheckerIpRangesOutput, error)
 	GetCheckerIpRangesWithContext(aws.Context, *route53.GetCheckerIpRangesInput, ...request.Option) (*route53.GetCheckerIpRangesOutput, error)
 	GetCheckerIpRangesRequest(*route53.GetCheckerIpRangesInput) (*request.Request, *route53.GetCheckerIpRangesOutput)
-
-	GetDNSSEC(*route53.GetDNSSECInput) (*route53.GetDNSSECOutput, error)
-	GetDNSSECWithContext(aws.Context, *route53.GetDNSSECInput, ...request.Option) (*route53.GetDNSSECOutput, error)
-	GetDNSSECRequest(*route53.GetDNSSECInput) (*request.Request, *route53.GetDNSSECOutput)
 
 	GetGeoLocation(*route53.GetGeoLocationInput) (*route53.GetGeoLocationOutput, error)
 	GetGeoLocationWithContext(aws.Context, *route53.GetGeoLocationInput, ...request.Option) (*route53.GetGeoLocationOutput, error)
@@ -254,16 +226,9 @@ type Route53API interface {
 	ListHostedZonesByNameWithContext(aws.Context, *route53.ListHostedZonesByNameInput, ...request.Option) (*route53.ListHostedZonesByNameOutput, error)
 	ListHostedZonesByNameRequest(*route53.ListHostedZonesByNameInput) (*request.Request, *route53.ListHostedZonesByNameOutput)
 
-	ListHostedZonesByVPC(*route53.ListHostedZonesByVPCInput) (*route53.ListHostedZonesByVPCOutput, error)
-	ListHostedZonesByVPCWithContext(aws.Context, *route53.ListHostedZonesByVPCInput, ...request.Option) (*route53.ListHostedZonesByVPCOutput, error)
-	ListHostedZonesByVPCRequest(*route53.ListHostedZonesByVPCInput) (*request.Request, *route53.ListHostedZonesByVPCOutput)
-
 	ListQueryLoggingConfigs(*route53.ListQueryLoggingConfigsInput) (*route53.ListQueryLoggingConfigsOutput, error)
 	ListQueryLoggingConfigsWithContext(aws.Context, *route53.ListQueryLoggingConfigsInput, ...request.Option) (*route53.ListQueryLoggingConfigsOutput, error)
 	ListQueryLoggingConfigsRequest(*route53.ListQueryLoggingConfigsInput) (*request.Request, *route53.ListQueryLoggingConfigsOutput)
-
-	ListQueryLoggingConfigsPages(*route53.ListQueryLoggingConfigsInput, func(*route53.ListQueryLoggingConfigsOutput, bool) bool) error
-	ListQueryLoggingConfigsPagesWithContext(aws.Context, *route53.ListQueryLoggingConfigsInput, func(*route53.ListQueryLoggingConfigsOutput, bool) bool, ...request.Option) error
 
 	ListResourceRecordSets(*route53.ListResourceRecordSetsInput) (*route53.ListResourceRecordSetsOutput, error)
 	ListResourceRecordSetsWithContext(aws.Context, *route53.ListResourceRecordSetsInput, ...request.Option) (*route53.ListResourceRecordSetsOutput, error)

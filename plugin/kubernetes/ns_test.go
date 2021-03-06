@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/coredns/coredns/plugin/kubernetes/object"
-
 	"github.com/miekg/dns"
+
 	api "k8s.io/api/core/v1"
 )
 
@@ -37,19 +37,19 @@ func (a APIConnTest) SvcIndex(s string) []*object.Service {
 func (APIConnTest) ServiceList() []*object.Service {
 	svcs := []*object.Service{
 		{
-			Name:       "dns-service",
-			Namespace:  "kube-system",
-			ClusterIPs: []string{"10.0.0.111"},
+			Name:      "dns-service",
+			Namespace: "kube-system",
+			ClusterIP: "10.0.0.111",
 		},
 		{
-			Name:       "hdls-dns-service",
-			Namespace:  "kube-system",
-			ClusterIPs: []string{api.ClusterIPNone},
+			Name:      "hdls-dns-service",
+			Namespace: "kube-system",
+			ClusterIP: api.ClusterIPNone,
 		},
 		{
-			Name:       "dns6-service",
-			Namespace:  "kube-system",
-			ClusterIPs: []string{"10::111"},
+			Name:      "dns6-service",
+			Namespace: "kube-system",
+			ClusterIP: "10::111",
 		},
 	}
 	return svcs
@@ -61,36 +61,49 @@ func (APIConnTest) EpIndexReverse(ip string) []*object.Endpoints {
 	}
 	eps := []*object.Endpoints{
 		{
-			Name:      "dns-service-slice1",
-			Namespace: "kube-system",
-			Index:     object.EndpointsKey("dns-service", "kube-system"),
 			Subsets: []object.EndpointSubset{
-				{Addresses: []object.EndpointAddress{{IP: "10.244.0.20"}}},
+				{
+					Addresses: []object.EndpointAddress{
+						{
+							IP: "10.244.0.20",
+						},
+					},
+				},
 			},
+			Name:      "dns-service",
+			Namespace: "kube-system",
 		},
 		{
-			Name:      "hdls-dns-service-slice1",
-			Namespace: "kube-system",
-			Index:     object.EndpointsKey("hdls-dns-service", "kube-system"),
 			Subsets: []object.EndpointSubset{
-				{Addresses: []object.EndpointAddress{{IP: "10.244.0.20"}}},
+				{
+					Addresses: []object.EndpointAddress{
+						{
+							IP: "10.244.0.20",
+						},
+					},
+				},
 			},
+			Name:      "hdls-dns-service",
+			Namespace: "kube-system",
 		},
 		{
-			Name:      "dns6-service-slice1",
-			Namespace: "kube-system",
-			Index:     object.EndpointsKey("dns6-service", "kube-system"),
 			Subsets: []object.EndpointSubset{
-				{Addresses: []object.EndpointAddress{{IP: "10.244.0.20"}}},
+				{
+					Addresses: []object.EndpointAddress{
+						{
+							IP: "10.244.0.20",
+						},
+					},
+				},
 			},
+			Name:      "dns6-service",
+			Namespace: "kube-system",
 		},
 	}
 	return eps
 }
 
-func (APIConnTest) GetNodeByName(ctx context.Context, name string) (*api.Node, error) {
-	return &api.Node{}, nil
-}
+func (APIConnTest) GetNodeByName(ctx context.Context, name string) (*api.Node, error) { return &api.Node{}, nil }
 func (APIConnTest) GetNamespaceByName(name string) (*api.Namespace, error) {
 	return &api.Namespace{}, nil
 }

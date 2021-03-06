@@ -10,57 +10,55 @@ import (
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // ServeDNS implements the plugin.Handler interface.
 func (c *Cache) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-	rc := r.Copy() // We potentially modify r, to prevent other plugins from seeing this (r is a pointer), copy r into rc.
-	state := request.Request{W: w, Req: rc}
-	do := state.Do()
+	state := request.Request{W: w, Req: r}
 
 	zone := plugin.Zones(c.Zones).Matches(state.Name())
 	if zone == "" {
-		return plugin.NextOrFailure(c.Name(), c.Next, ctx, w, rc)
+		return plugin.NextOrFailure(c.Name(), c.Next, ctx, w, r)
 	}
 
 	now := c.now().UTC()
-	server := metrics.WithServer(ctx)
 
-	// On cache miss, if the request has the OPT record and the DO bit set we leave the message as-is. If there isn't a DO bit
-	// set we will modify the request to _add_ one. This means we will always do DNSSEC lookups on cache misses.
-	// When writing to cache, any DNSSEC RRs in the response are written to cache with the response.
-	// When sending a response to a non-DNSSEC client, we remove DNSSEC RRs from the response. We use a 2048 buffer size, which is
-	// less than 4096 (and older default) and more than 1024 which may be too small. We might need to tweaks this
-	// value to be smaller still to prevent UDP fragmentation?
+	server := metrics.WithServer(ctx)
 
 	ttl := 0
 	i := c.getIgnoreTTL(now, state, server)
 	if i != nil {
 		ttl = i.ttl(now)
 	}
-	if i == nil {
-		crr := &ResponseWriter{ResponseWriter: w, Cache: c, state: state, server: server, do: do}
-		return c.doRefresh(ctx, state, crr)
+	if i == nil || -ttl >= int(c.staleUpTo.Seconds()) {
+		crr := &ResponseWriter{ResponseWriter: w, Cache: c, state: state, server: server}
+		return plugin.NextOrFailure(c.Name(), c.Next, ctx, crr, r)
 	}
 	if ttl < 0 {
 		servedStale.WithLabelValues(server).Inc()
 		// Adjust the time to get a 0 TTL in the reply built from a stale item.
 		now = now.Add(time.Duration(ttl) * time.Second)
-		cw := newPrefetchResponseWriter(server, state, c)
-		go c.doPrefetch(ctx, state, cw, i, now)
-	} else if c.shouldPrefetch(i, now) {
-		cw := newPrefetchResponseWriter(server, state, c)
-		go c.doPrefetch(ctx, state, cw, i, now)
+		go func() {
+			r := r.Copy()
+			crr := &ResponseWriter{Cache: c, state: state, server: server, prefetch: true, remoteAddr: w.LocalAddr()}
+			plugin.NextOrFailure(c.Name(), c.Next, ctx, crr, r)
+		}()
 	}
-	resp := i.toMsg(r, now, do)
+	resp := i.toMsg(r, now)
 	w.WriteMsg(resp)
 
+	if c.shouldPrefetch(i, now) {
+		go c.doPrefetch(ctx, state, server, i, now)
+	}
 	return dns.RcodeSuccess, nil
 }
 
-func (c *Cache) doPrefetch(ctx context.Context, state request.Request, cw *ResponseWriter, i *item, now time.Time) {
-	cachePrefetches.WithLabelValues(cw.server).Inc()
-	c.doRefresh(ctx, state, cw)
+func (c *Cache) doPrefetch(ctx context.Context, state request.Request, server string, i *item, now time.Time) {
+	cw := newPrefetchResponseWriter(server, state, c)
+
+	cachePrefetches.WithLabelValues(server).Inc()
+	plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, state.Req)
 
 	// When prefetching we loose the item i, and with it the frequency
 	// that we've gathered sofar. See we copy the frequencies info back
@@ -68,13 +66,6 @@ func (c *Cache) doPrefetch(ctx context.Context, state request.Request, cw *Respo
 	if i1 := c.exists(state); i1 != nil {
 		i1.Freq.Reset(now, i.Freq.Hits())
 	}
-}
-
-func (c *Cache) doRefresh(ctx context.Context, state request.Request, cw *ResponseWriter) (int, error) {
-	if !state.Do() {
-		setDo(state.Req)
-	}
-	return plugin.NextOrFailure(c.Name(), c.Next, ctx, cw, state.Req)
 }
 
 func (c *Cache) shouldPrefetch(i *item, now time.Time) bool {
@@ -90,7 +81,7 @@ func (c *Cache) shouldPrefetch(i *item, now time.Time) bool {
 func (c *Cache) Name() string { return "cache" }
 
 func (c *Cache) get(now time.Time, state request.Request, server string) (*item, bool) {
-	k := hash(state.Name(), state.QType())
+	k := hash(state.Name(), state.QType(), state.Do())
 
 	if i, ok := c.ncache.Get(k); ok && i.(*item).ttl(now) > 0 {
 		cacheHits.WithLabelValues(server, Denial).Inc()
@@ -107,28 +98,27 @@ func (c *Cache) get(now time.Time, state request.Request, server string) (*item,
 
 // getIgnoreTTL unconditionally returns an item if it exists in the cache.
 func (c *Cache) getIgnoreTTL(now time.Time, state request.Request, server string) *item {
-	k := hash(state.Name(), state.QType())
+	k := hash(state.Name(), state.QType(), state.Do())
 
 	if i, ok := c.ncache.Get(k); ok {
 		ttl := i.(*item).ttl(now)
 		if ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds())) {
 			cacheHits.WithLabelValues(server, Denial).Inc()
-			return i.(*item)
 		}
+		return i.(*item)
 	}
 	if i, ok := c.pcache.Get(k); ok {
 		ttl := i.(*item).ttl(now)
 		if ttl > 0 || (c.staleUpTo > 0 && -ttl < int(c.staleUpTo.Seconds())) {
 			cacheHits.WithLabelValues(server, Success).Inc()
-			return i.(*item)
 		}
+		return i.(*item)
 	}
-	cacheMisses.WithLabelValues(server).Inc()
 	return nil
 }
 
 func (c *Cache) exists(state request.Request) *item {
-	k := hash(state.Name(), state.QType())
+	k := hash(state.Name(), state.QType(), state.Do())
 	if i, ok := c.ncache.Get(k); ok {
 		return i.(*item)
 	}
@@ -138,21 +128,46 @@ func (c *Cache) exists(state request.Request) *item {
 	return nil
 }
 
-// setDo sets the DO bit and UDP buffer size in the message m.
-func setDo(m *dns.Msg) {
-	o := m.IsEdns0()
-	if o != nil {
-		o.SetDo()
-		o.SetUDPSize(defaultUDPBufSize)
-		return
-	}
+var (
+	cacheSize = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "size",
+		Help:      "The number of elements in the cache.",
+	}, []string{"server", "type"})
 
-	o = &dns.OPT{Hdr: dns.RR_Header{Name: ".", Rrtype: dns.TypeOPT}}
-	o.SetDo()
-	o.SetUDPSize(defaultUDPBufSize)
-	m.Extra = append(m.Extra, o)
-}
+	cacheHits = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "hits_total",
+		Help:      "The count of cache hits.",
+	}, []string{"server", "type"})
 
-// defaultUDPBufsize is the bufsize the cache plugin uses on outgoing requests that don't
-// have an OPT RR.
-const defaultUDPBufSize = 2048
+	cacheMisses = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "misses_total",
+		Help:      "The count of cache misses.",
+	}, []string{"server"})
+
+	cachePrefetches = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "prefetch_total",
+		Help:      "The number of time the cache has prefetched a cached item.",
+	}, []string{"server"})
+
+	cacheDrops = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "drops_total",
+		Help:      "The number responses that are not cached, because the reply is malformed.",
+	}, []string{"server"})
+
+	servedStale = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "cache",
+		Name:      "served_stale_total",
+		Help:      "The number of requests served from stale cache entries.",
+	}, []string{"server"})
+)

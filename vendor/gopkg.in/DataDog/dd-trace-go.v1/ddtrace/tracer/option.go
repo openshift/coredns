@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016-2019 Datadog, Inc.
 
 package tracer
 
@@ -11,18 +11,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/globalconfig"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
-	"gopkg.in/DataDog/dd-trace-go.v1/internal/version"
-
-	"github.com/DataDog/datadog-go/statsd"
 )
 
 // config holds the tracer configuration.
@@ -30,21 +24,8 @@ type config struct {
 	// debug, when true, writes details to logs.
 	debug bool
 
-	// lambda, when true, enables the lambda trace writer
-	logToStdout bool
-
-	// logStartup, when true, causes various startup info to be written
-	// when the tracer starts.
-	logStartup bool
-
 	// serviceName specifies the name of this application.
 	serviceName string
-
-	// version specifies the version of this application
-	version string
-
-	// env contains the environment that this application will run under.
-	env string
 
 	// sampler specifies the sampler that will be used for sampling traces.
 	sampler Sampler
@@ -63,8 +44,8 @@ type config struct {
 	// propagator propagates span context cross-process
 	propagator Propagator
 
-	// httpClient specifies the HTTP client to be used by the agent's transport.
-	httpClient *http.Client
+	// httpRoundTripper defines the http.RoundTripper used by the agent transport.
+	httpRoundTripper http.RoundTripper
 
 	// hostname is automatically assigned when the DD_TRACE_REPORT_HOSTNAME is set to true,
 	// and is added as a special tag to the root span of traces.
@@ -81,32 +62,17 @@ type config struct {
 	// Datadog Agent. If not set, it defaults to "localhost:8125" or to the
 	// combination of the environment variables DD_AGENT_HOST and DD_DOGSTATSD_PORT.
 	dogstatsdAddr string
-
-	// statsd is used for tracking metrics associated with the runtime and the tracer.
-	statsd statsdClient
-
-	// samplingRules contains user-defined rules determine the sampling rate to apply
-	// to spans.
-	samplingRules []SamplingRule
-
-	// tickChan specifies a channel which will receive the time every time the tracer must flush.
-	// It defaults to time.Ticker; replaced in tests.
-	tickChan <-chan time.Time
-
-	// noDebugStack disables the collection of debug stack traces globally. No traces reporting
-	// errors will record a stack trace when this option is set.
-	noDebugStack bool
 }
 
 // StartOption represents a function that can be provided as a parameter to Start.
 type StartOption func(*config)
 
-// newConfig renders the tracer configuration based on defaults, environment variables
-// and passed user opts.
-func newConfig(opts ...StartOption) *config {
-	c := new(config)
+// defaults sets the default values for a config.
+func defaults(c *config) {
+	c.serviceName = filepath.Base(os.Args[0])
 	c.sampler = NewAllSampler()
 	c.agentAddr = defaultAddress
+
 	statsdHost, statsdPort := "localhost", "8125"
 	if v := os.Getenv("DD_AGENT_HOST"); v != "" {
 		statsdHost = v
@@ -116,9 +82,6 @@ func newConfig(opts ...StartOption) *config {
 	}
 	c.dogstatsdAddr = net.JoinHostPort(statsdHost, statsdPort)
 
-	if internal.BoolEnv("DD_TRACE_ANALYTICS_ENABLED", false) {
-		globalconfig.SetAnalyticsRate(1.0)
-	}
 	if os.Getenv("DD_TRACE_REPORT_HOSTNAME") == "true" {
 		var err error
 		c.hostname, err = os.Hostname()
@@ -126,113 +89,6 @@ func newConfig(opts ...StartOption) *config {
 			log.Warn("unable to look up hostname: %v", err)
 		}
 	}
-	if v := os.Getenv("DD_ENV"); v != "" {
-		c.env = v
-	}
-	if v := os.Getenv("DD_SERVICE"); v != "" {
-		c.serviceName = v
-		globalconfig.SetServiceName(v)
-	}
-	if ver := os.Getenv("DD_VERSION"); ver != "" {
-		c.version = ver
-	}
-	if v := os.Getenv("DD_TAGS"); v != "" {
-		for _, tag := range strings.Split(v, ",") {
-			tag = strings.TrimSpace(tag)
-			if tag == "" {
-				continue
-			}
-			kv := strings.SplitN(tag, ":", 2)
-			k := strings.TrimSpace(kv[0])
-			switch len(kv) {
-			case 1:
-				WithGlobalTag(k, "")(c)
-			case 2:
-				WithGlobalTag(k, strings.TrimSpace(kv[1]))(c)
-			}
-		}
-	}
-	if _, ok := os.LookupEnv("AWS_LAMBDA_FUNCTION_NAME"); ok {
-		// AWS_LAMBDA_FUNCTION_NAME being set indicates that we're running in an AWS Lambda environment.
-		// See: https://docs.aws.amazon.com/lambda/latest/dg/configuration-envvars.html
-		c.logToStdout = true
-	}
-	c.logStartup = internal.BoolEnv("DD_TRACE_STARTUP_LOGS", true)
-	c.runtimeMetrics = internal.BoolEnv("DD_RUNTIME_METRICS_ENABLED", false)
-	c.debug = internal.BoolEnv("DD_TRACE_DEBUG", false)
-	for _, fn := range opts {
-		fn(c)
-	}
-	WithGlobalTag(ext.RuntimeID, globalconfig.RuntimeID())(c)
-	if c.env == "" {
-		if v, ok := c.globalTags["env"]; ok {
-			if e, ok := v.(string); ok {
-				c.env = e
-			}
-		}
-	}
-	if c.version == "" {
-		if v, ok := c.globalTags["version"]; ok {
-			if ver, ok := v.(string); ok {
-				c.version = ver
-			}
-		}
-	}
-	if c.serviceName == "" {
-		if v, ok := c.globalTags["service"]; ok {
-			if s, ok := v.(string); ok {
-				c.serviceName = s
-				globalconfig.SetServiceName(s)
-			}
-		} else {
-			c.serviceName = filepath.Base(os.Args[0])
-		}
-	}
-	if c.transport == nil {
-		c.transport = newTransport(c.agentAddr, c.httpClient)
-	}
-	if c.propagator == nil {
-		c.propagator = NewPropagator(nil)
-	}
-	if c.logger != nil {
-		log.UseLogger(c.logger)
-	}
-	if c.debug {
-		log.SetLevel(log.LevelDebug)
-	}
-	if c.statsd == nil {
-		client, err := statsd.New(c.dogstatsdAddr, statsd.WithMaxMessagesPerPayload(40), statsd.WithTags(statsTags(c)))
-		if err != nil {
-			log.Warn("Runtime and health metrics disabled: %v", err)
-			c.statsd = &statsd.NoOpClient{}
-		} else {
-			c.statsd = client
-		}
-	}
-	return c
-}
-
-func statsTags(c *config) []string {
-	tags := []string{
-		"lang:go",
-		"version:" + version.Tag,
-		"lang_version:" + runtime.Version(),
-	}
-	if c.serviceName != "" {
-		tags = append(tags, "service:"+c.serviceName)
-	}
-	if c.env != "" {
-		tags = append(tags, "env:"+c.env)
-	}
-	if c.hostname != "" {
-		tags = append(tags, "host:"+c.hostname)
-	}
-	for k, v := range c.globalTags {
-		if vstr, ok := v.(string); ok {
-			tags = append(tags, k+":"+vstr)
-		}
-	}
-	return tags
 }
 
 // WithLogger sets logger as the tracer's error printer.
@@ -253,26 +109,10 @@ func WithPrioritySampling() StartOption {
 	}
 }
 
-// WithDebugStack can be used to globally enable or disable the collection of stack traces when
-// spans finish with errors. It is enabled by default. This is a global version of the NoDebugStack
-// FinishOption.
-func WithDebugStack(enabled bool) StartOption {
-	return func(c *config) {
-		c.noDebugStack = !enabled
-	}
-}
-
 // WithDebugMode enables debug mode on the tracer, resulting in more verbose logging.
 func WithDebugMode(enabled bool) StartOption {
 	return func(c *config) {
 		c.debug = enabled
-	}
-}
-
-// WithLambdaMode enables lambda mode on the tracer, for use with AWS Lambda.
-func WithLambdaMode(enabled bool) StartOption {
-	return func(c *config) {
-		c.logToStdout = enabled
 	}
 }
 
@@ -283,26 +123,10 @@ func WithPropagator(p Propagator) StartOption {
 	}
 }
 
-// WithServiceName is deprecated. Please use WithService.
-// If you are using an older version and you are upgrading from WithServiceName
-// to WithService, please note that WithService will determine the service name of
-// server and framework integrations.
+// WithServiceName sets the default service name to be used with the tracer.
 func WithServiceName(name string) StartOption {
 	return func(c *config) {
 		c.serviceName = name
-		if globalconfig.ServiceName() != "" {
-			log.Warn("ddtrace/tracer: deprecated config WithServiceName should not be used " +
-				"with `WithService` or `DD_SERVICE`; integration service name will not be set.")
-		}
-		globalconfig.SetServiceName("")
-	}
-}
-
-// WithService sets the default service name for the program.
-func WithService(name string) StartOption {
-	return func(c *config) {
-		c.serviceName = name
-		globalconfig.SetServiceName(c.serviceName)
 	}
 }
 
@@ -311,14 +135,6 @@ func WithService(name string) StartOption {
 func WithAgentAddr(addr string) StartOption {
 	return func(c *config) {
 		c.agentAddr = addr
-	}
-}
-
-// WithEnv sets the environment to which all traces started by the tracer will be submitted.
-// The default value is the environment variable DD_ENV, if it is set.
-func WithEnv(env string) StartOption {
-	return func(c *config) {
-		c.env = env
 	}
 }
 
@@ -341,19 +157,12 @@ func WithSampler(s Sampler) StartOption {
 	}
 }
 
-// WithHTTPRoundTripper is deprecated. Please consider using WithHTTPClient instead.
-// The function allows customizing the underlying HTTP transport for emitting spans.
+// WithHTTPRoundTripper allows customizing the underlying HTTP transport for
+// emitting spans. This is useful for advanced customization such as emitting
+// spans to a unix domain socket. The default should be used in most cases.
 func WithHTTPRoundTripper(r http.RoundTripper) StartOption {
-	return WithHTTPClient(&http.Client{
-		Transport: r,
-		Timeout:   defaultHTTPTimeout,
-	})
-}
-
-// WithHTTPClient specifies the HTTP client to use when emitting spans to the agent.
-func WithHTTPClient(client *http.Client) StartOption {
 	return func(c *config) {
-		c.httpClient = client
+		c.httpRoundTripper = r
 	}
 }
 
@@ -397,22 +206,6 @@ func WithDogstatsdAddress(addr string) StartOption {
 	}
 }
 
-// WithSamplingRules specifies the sampling rates to apply to spans based on the
-// provided rules.
-func WithSamplingRules(rules []SamplingRule) StartOption {
-	return func(cfg *config) {
-		cfg.samplingRules = rules
-	}
-}
-
-// WithServiceVersion specifies the version of the service that is running. This will
-// be included in spans from this service in the "version" tag.
-func WithServiceVersion(version string) StartOption {
-	return func(cfg *config) {
-		cfg.version = version
-	}
-}
-
 // StartSpanOption is a configuration option for StartSpan. It is aliased in order
 // to help godoc group all the functions returning it together. It is considered
 // more correct to refer to it as the type as the origin, ddtrace.StartSpanOption.
@@ -445,11 +238,6 @@ func SpanType(name string) StartSpanOption {
 	return Tag(ext.SpanType, name)
 }
 
-// Measured marks this span to be measured for metrics and stats calculations.
-func Measured() StartSpanOption {
-	return Tag(keyMeasured, 1)
-}
-
 // WithSpanID sets the SpanID on the started span, instead of using a random number.
 // If there is no parent Span (eg from ChildOf), then the TraceID will also be set to the
 // value given here.
@@ -473,16 +261,6 @@ func StartTime(t time.Time) StartSpanOption {
 	return func(cfg *ddtrace.StartSpanConfig) {
 		cfg.StartTime = t
 	}
-}
-
-// AnalyticsRate sets a custom analytics rate for a span. It decides the percentage
-// of events that will be picked up by the App Analytics product. It's represents a
-// float64 between 0 and 1 where 0.5 would represent 50% of events.
-func AnalyticsRate(rate float64) StartSpanOption {
-	if math.IsNaN(rate) {
-		return func(cfg *ddtrace.StartSpanConfig) {}
-	}
-	return Tag(ext.EventSampleRate, rate)
 }
 
 // FinishOption is a configuration option for FinishSpan. It is aliased in order

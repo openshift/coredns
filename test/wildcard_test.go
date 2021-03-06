@@ -17,8 +17,9 @@ func TestLookupWildcard(t *testing.T) {
 	defer rm()
 
 	corefile := `example.org:0 {
-		file ` + name + `
-	}`
+       file ` + name + `
+}
+`
 
 	i, udp, _, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {
@@ -86,4 +87,5 @@ func TestLookupWildcard(t *testing.T) {
 			continue
 		}
 	}
+
 }

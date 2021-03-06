@@ -19,12 +19,8 @@ func (s *Service) HostType() (what uint16, normalized net.IP) {
 	ip := net.ParseIP(s.Host)
 
 	switch {
-
 	case ip == nil:
-		if len(s.Text) == 0 {
-			return dns.TypeCNAME, nil
-		}
-		return dns.TypeTXT, nil
+		return dns.TypeCNAME, nil
 
 	case ip.To4() != nil:
 		return dns.TypeA, ip.To4()

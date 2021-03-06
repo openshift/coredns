@@ -1,13 +1,13 @@
 package sign
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/coredns/caddy"
-
+	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 )
 
@@ -175,4 +175,8 @@ func TestSignDS(t *testing.T) {
 	if x := nsec[0].Header().Ttl; x != minttl {
 		t.Errorf("Expected no NSEC TTL to be %d for %s, got %d", minttl, "www.miek.nl.", x)
 	}
+	// print zone on error
+	buf := &bytes.Buffer{}
+	write(buf, z)
+	t.Logf("%s\n", buf)
 }

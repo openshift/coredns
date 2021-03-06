@@ -3,9 +3,10 @@ package ready
 import (
 	"net"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+
+	"github.com/caddyserver/caddy"
 )
 
 func init() { plugin.Register("ready", setup) }

@@ -6,7 +6,7 @@
 
 ## Description
 
-The *hosts* plugin is useful for serving zones from a `/etc/hosts` file. It serves from a preloaded
+The hosts plugin is useful for serving zones from a `/etc/hosts` file. It serves from a preloaded
 file that exists on disk. It checks the file for changes and updates the zones accordingly. This
 plugin only supports A, AAAA, and PTR records. The hosts plugin can be used with readily
 available hosts files that block access to advertising servers.
@@ -76,7 +76,7 @@ hosts [FILE [ZONES...]] {
 
 If monitoring is enabled (via the *prometheus* plugin) then the following metrics are exported:
 
-- `coredns_hosts_entries{}` - The combined number of entries in hosts and Corefile.
+- `coredns_hosts_entries_count{}` - The combined number of entries in hosts and Corefile.
 - `coredns_hosts_reload_timestamp_seconds{}` - The timestamp of the last reload of hosts file.
 
 ## Examples

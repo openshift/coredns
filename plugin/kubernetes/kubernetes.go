@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 
 	"github.com/coredns/coredns/plugin"
@@ -19,7 +18,6 @@ import (
 
 	"github.com/miekg/dns"
 	api "k8s.io/api/core/v1"
-	discovery "k8s.io/api/discovery/v1beta1"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -48,6 +46,7 @@ type Kubernetes struct {
 	primaryZoneIndex int
 	localIPs         []net.IP
 	autoPathSearch   []string // Local search path from /etc/resolv.conf. Needed for autopath.
+	TransferTo       []string
 }
 
 // New returns a initialized Kubernetes. It default interfaceAddrFunc to return 127.0.0.1. All other
@@ -70,7 +69,7 @@ const (
 	// podModeInsecure is where pod requests are answered without verifying they exist
 	podModeInsecure = "insecure"
 	// DNSSchemaVersion is the schema version: https://github.com/kubernetes/dns/blob/master/docs/specification.md
-	DNSSchemaVersion = "1.1.0"
+	DNSSchemaVersion = "1.0.1"
 	// Svc is the DNS schema for kubernetes services
 	Svc = "svc"
 	// Pod is the DNS schema for kubernetes pods
@@ -246,23 +245,6 @@ func (k *Kubernetes) InitKubeCache(ctx context.Context) (err error) {
 
 	k.opts.zones = k.Zones
 	k.opts.endpointNameMode = k.endpointNameMode
-	// Enable use of endpoint slices if the API supports the discovery v1 beta1 api
-	if _, err := kubeClient.Discovery().ServerResourcesForGroupVersion(discovery.SchemeGroupVersion.String()); err == nil {
-		k.opts.useEndpointSlices = true
-	}
-	// Disable use of endpoint slices for k8s versions 1.18 and earlier. Endpoint slices were
-	// introduced in 1.17 but EndpointSliceMirroring was not added until 1.19.
-	sv, err := kubeClient.ServerVersion()
-	if err != nil {
-		return err
-	}
-	major, _ := strconv.Atoi(sv.Major)
-	minor, _ := strconv.Atoi(sv.Minor)
-	if k.opts.useEndpointSlices && major <= 1 && minor <= 18 {
-		log.Info("watching Endpoints instead of EndpointSlices in k8s versions < 1.19")
-		k.opts.useEndpointSlices = false
-	}
-
 	k.APIConn = newdnsController(ctx, kubeClient, k.opts)
 
 	return err
@@ -270,7 +252,7 @@ func (k *Kubernetes) InitKubeCache(ctx context.Context) (err error) {
 
 // Records looks up services in kubernetes.
 func (k *Kubernetes) Records(ctx context.Context, state request.Request, exact bool) ([]msg.Service, error) {
-	r, e := parseRequest(state.Name(), state.Zone)
+	r, e := parseRequest(state)
 	if e != nil {
 		return nil, e
 	}
@@ -433,7 +415,8 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 		// If "ignore empty_service" option is set and no endpoints exist, return NXDOMAIN unless
 		// it's a headless or externalName service (covered below).
-		if k.opts.ignoreEmptyService && svc.Type != api.ServiceTypeExternalName && !svc.Headless() { // serve NXDOMAIN if no endpoint is able to answer
+		if k.opts.ignoreEmptyService && svc.ClusterIP != api.ClusterIPNone && svc.Type != api.ServiceTypeExternalName {
+			// serve NXDOMAIN if no endpoint is able to answer
 			podsCount := 0
 			for _, ep := range endpointsListFunc() {
 				for _, eps := range ep.Subsets {
@@ -446,26 +429,13 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 			}
 		}
 
-		// External service
-		if svc.Type == api.ServiceTypeExternalName {
-			s := msg.Service{Key: strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/"), Host: svc.ExternalName, TTL: k.ttl}
-			if t, _ := s.HostType(); t == dns.TypeCNAME {
-				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
-				services = append(services, s)
-
-				err = nil
-			}
-			continue
-		}
-
 		// Endpoint query or headless service
-		if svc.Headless() || r.endpoint != "" {
+		if svc.ClusterIP == api.ClusterIPNone || r.endpoint != "" {
 			if endpointsList == nil {
 				endpointsList = endpointsListFunc()
 			}
-
 			for _, ep := range endpointsList {
-				if object.EndpointsKey(svc.Name, svc.Namespace) != ep.Index {
+				if ep.Name != svc.Name || ep.Namespace != svc.Namespace {
 					continue
 				}
 
@@ -496,6 +466,18 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 			continue
 		}
 
+		// External service
+		if svc.Type == api.ServiceTypeExternalName {
+			s := msg.Service{Key: strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/"), Host: svc.ExternalName, TTL: k.ttl}
+			if t, _ := s.HostType(); t == dns.TypeCNAME {
+				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+				services = append(services, s)
+
+				err = nil
+			}
+			continue
+		}
+
 		// ClusterIP service
 		for _, p := range svc.Ports {
 			if !(match(r.port, p.Name) && match(r.protocol, string(p.Protocol))) {
@@ -504,21 +486,14 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 			err = nil
 
-			for _, ip := range svc.ClusterIPs {
-				s := msg.Service{Host: ip, Port: int(p.Port), TTL: k.ttl}
-				s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
-				services = append(services, s)
-			}
+			s := msg.Service{Host: svc.ClusterIP, Port: int(p.Port), TTL: k.ttl}
+			s.Key = strings.Join([]string{zonePath, Svc, svc.Namespace, svc.Name}, "/")
+
+			services = append(services, s)
 		}
 	}
 	return services, err
 }
-
-// Serial return the SOA serial.
-func (k *Kubernetes) Serial(state request.Request) uint32 { return uint32(k.APIConn.Modified()) }
-
-// MinTTL returns the minimal TTL.
-func (k *Kubernetes) MinTTL(state request.Request) uint32 { return k.ttl }
 
 // match checks if a and b are equal taking wildcards into account.
 func match(a, b string) bool {

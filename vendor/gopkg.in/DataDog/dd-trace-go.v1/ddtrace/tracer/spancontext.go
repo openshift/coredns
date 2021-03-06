@@ -1,13 +1,12 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016-2019 Datadog, Inc.
 
 package tracer
 
 import (
 	"sync"
-	"sync/atomic"
 
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/internal"
@@ -32,10 +31,9 @@ type spanContext struct {
 	traceID uint64
 	spanID  uint64
 
-	mu         sync.RWMutex // guards below fields
-	baggage    map[string]string
-	hasBaggage int32  // atomic int for quick checking presence of baggage. 0 indicates no baggage, otherwise baggage exists.
-	origin     string // e.g. "synthetics"
+	mu      sync.RWMutex // guards below fields
+	baggage map[string]string
+	origin  string // e.g. "synthetics"
 }
 
 // newSpanContext creates a new SpanContext to serve as context for the given
@@ -78,9 +76,6 @@ func (c *spanContext) TraceID() uint64 { return c.traceID }
 
 // ForeachBaggageItem implements ddtrace.SpanContext.
 func (c *spanContext) ForeachBaggageItem(handler func(k, v string) bool) {
-	if atomic.LoadInt32(&c.hasBaggage) == 0 {
-		return
-	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	for k, v := range c.baggage {
@@ -97,27 +92,27 @@ func (c *spanContext) setSamplingPriority(p int) {
 	c.trace.setSamplingPriority(float64(p))
 }
 
-func (c *spanContext) samplingPriority() (p int, ok bool) {
+func (c *spanContext) samplingPriority() int {
 	if c.trace == nil {
-		return 0, false
+		return 0
 	}
 	return c.trace.samplingPriority()
+}
+
+func (c *spanContext) hasSamplingPriority() bool {
+	return c.trace != nil && c.trace.hasSamplingPriority()
 }
 
 func (c *spanContext) setBaggageItem(key, val string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.baggage == nil {
-		atomic.StoreInt32(&c.hasBaggage, 1)
 		c.baggage = make(map[string]string, 1)
 	}
 	c.baggage[key] = val
 }
 
 func (c *spanContext) baggageItem(key string) string {
-	if atomic.LoadInt32(&c.hasBaggage) == 0 {
-		return ""
-	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.baggage[key]
@@ -162,13 +157,19 @@ func newTrace() *trace {
 	return &trace{spans: make([]*span, 0, traceStartSize)}
 }
 
-func (t *trace) samplingPriority() (p int, ok bool) {
+func (t *trace) hasSamplingPriority() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.priority != nil
+}
+
+func (t *trace) samplingPriority() int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	if t.priority == nil {
-		return 0, false
+		return 0
 	}
-	return int(*t.priority), true
+	return int(*t.priority)
 }
 
 func (t *trace) setSamplingPriority(p float64) {
@@ -200,24 +201,17 @@ func (t *trace) push(sp *span) {
 	if t.full {
 		return
 	}
-	tr, haveTracer := internal.GetGlobalTracer().(*tracer)
 	if len(t.spans) >= traceMaxSize {
 		// capacity is reached, we will not be able to complete this trace.
 		t.full = true
 		t.spans = nil // GC
 		log.Error("trace buffer full (%d), dropping trace", traceMaxSize)
-		if haveTracer {
-			atomic.AddInt64(&tr.tracesDropped, 1)
-		}
 		return
 	}
 	if v, ok := sp.Metrics[keySamplingPriority]; ok {
 		t.setSamplingPriorityLocked(v)
 	}
 	t.spans = append(t.spans, sp)
-	if haveTracer {
-		atomic.AddInt64(&tr.spansStarted, 1)
-	}
 }
 
 // finishedOne aknowledges that another span in the trace has finished, and checks
@@ -247,7 +241,6 @@ func (t *trace) finishedOne(s *span) {
 	if tr, ok := internal.GetGlobalTracer().(*tracer); ok {
 		// we have a tracer that can receive completed traces.
 		tr.pushTrace(t.spans)
-		atomic.AddInt64(&tr.spansFinished, int64(len(t.spans)))
 	}
 	t.spans = nil
 	t.finished = 0 // important, because a buffer can be used for several flushes

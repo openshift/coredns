@@ -30,26 +30,26 @@ func TestMetrics(t *testing.T) {
 		// This all works because 1 bucket (1 zone, 1 type)
 		{
 			next:          test.NextHandler(dns.RcodeSuccess, nil),
-			qname:         "example.org.",
-			metric:        "coredns_dns_requests_total",
+			qname:         "example.org",
+			metric:        "coredns_dns_request_count_total",
 			expectedValue: "1",
 		},
 		{
 			next:          test.NextHandler(dns.RcodeSuccess, nil),
-			qname:         "example.org.",
-			metric:        "coredns_dns_requests_total",
+			qname:         "example.org",
+			metric:        "coredns_dns_request_count_total",
 			expectedValue: "2",
 		},
 		{
 			next:          test.NextHandler(dns.RcodeSuccess, nil),
-			qname:         "example.org.",
-			metric:        "coredns_dns_requests_total",
+			qname:         "example.org",
+			metric:        "coredns_dns_request_type_count_total",
 			expectedValue: "3",
 		},
 		{
 			next:          test.NextHandler(dns.RcodeSuccess, nil),
-			qname:         "example.org.",
-			metric:        "coredns_dns_responses_total",
+			qname:         "example.org",
+			metric:        "coredns_dns_response_rcode_count_total",
 			expectedValue: "4",
 		},
 	}
@@ -61,7 +61,7 @@ func TestMetrics(t *testing.T) {
 		if tc.qtype == 0 {
 			tc.qtype = dns.TypeA
 		}
-		req.SetQuestion(tc.qname, tc.qtype)
+		req.SetQuestion(dns.Fqdn(tc.qname), tc.qtype)
 		met.Next = tc.next
 
 		rec := dnstest.NewRecorder(&test.ResponseWriter{})

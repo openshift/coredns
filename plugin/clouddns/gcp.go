@@ -1,14 +1,10 @@
 package clouddns
 
-import (
-	"context"
-
-	gcp "google.golang.org/api/dns/v1"
-)
+import gcp "google.golang.org/api/dns/v1"
 
 type gcpDNS interface {
 	zoneExists(projectName, hostedZoneName string) error
-	listRRSets(ctx context.Context, projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error)
+	listRRSets(projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error)
 }
 
 type gcpClient struct {
@@ -27,16 +23,10 @@ func (c gcpClient) zoneExists(projectName, hostedZoneName string) error {
 
 // listRRSets is a wrapper method around `gcp.Service.ResourceRecordSets.List`
 // it fetches and returns the record sets for a hosted zone.
-func (c gcpClient) listRRSets(ctx context.Context, projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error) {
-	req := c.ResourceRecordSets.List(projectName, hostedZoneName)
-	var rs []*gcp.ResourceRecordSet
-	if err := req.Pages(ctx, func(page *gcp.ResourceRecordSetsListResponse) error {
-		for _, rr := range page.Rrsets {
-			rs = append(rs, rr)
-		}
-		return nil
-	}); err != nil {
+func (c gcpClient) listRRSets(projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error) {
+	rr, err := c.ResourceRecordSets.List(projectName, hostedZoneName).Do()
+	if err != nil {
 		return nil, err
 	}
-	return &gcp.ResourceRecordSetsListResponse{Rrsets: rs}, nil
+	return rr, nil
 }

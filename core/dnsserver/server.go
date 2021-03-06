@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/metrics/vars"
 	"github.com/coredns/coredns/plugin/pkg/edns"
@@ -66,6 +65,10 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		if site.Debug {
 			s.debug = true
 			log.D.Set()
+		} else {
+			// When reloading we need to explicitly disable debug logging if it is now disabled.
+			s.debug = false
+			log.D.Clear()
 		}
 		// set the config per zone
 		s.zones[site.Zone] = site
@@ -93,16 +96,8 @@ func NewServer(addr string, group []*Config) (*Server, error) {
 		site.pluginChain = stack
 	}
 
-	if !s.debug {
-		// When reloading we need to explicitly disable debug logging if it is now disabled.
-		log.D.Clear()
-	}
-
 	return s, nil
 }
-
-// Compile-time check to ensure Server implements the caddy.GracefulServer interface
-var _ caddy.GracefulServer = &Server{}
 
 // Serve starts the server with an existing listener. It blocks until the server stops.
 // This implements caddy.TCPServer interface.
@@ -110,7 +105,6 @@ func (s *Server) Serve(l net.Listener) error {
 	s.m.Lock()
 	s.server[tcp] = &dns.Server{Listener: l, Net: "tcp", Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		ctx := context.WithValue(context.Background(), Key{}, s)
-		ctx = context.WithValue(ctx, LoopKey{}, 0)
 		s.ServeDNS(ctx, w, r)
 	})}
 	s.m.Unlock()
@@ -124,7 +118,6 @@ func (s *Server) ServePacket(p net.PacketConn) error {
 	s.m.Lock()
 	s.server[udp] = &dns.Server{PacketConn: p, Net: "udp", Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 		ctx := context.WithValue(context.Background(), Key{}, s)
-		ctx = context.WithValue(ctx, LoopKey{}, 0)
 		s.ServeDNS(ctx, w, r)
 	})}
 	s.m.Unlock()
@@ -196,7 +189,7 @@ func (s *Server) Stop() (err error) {
 // Address together with Stop() implement caddy.GracefulServer.
 func (s *Server) Address() string { return s.Addr }
 
-// ServeDNS is the entry point for every request to the address that
+// ServeDNS is the entry point for every request to the address that s
 // is bound to. It acts as a multiplexer for the requests zonename as
 // defined in the request so that the correct zone
 // (configuration and plugin stack) will handle the request.
@@ -242,10 +235,6 @@ func (s *Server) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	for {
 		if h, ok := s.zones[q[off:]]; ok {
-			if h.pluginChain == nil { // zone defined, but has not got any plugins
-				errorAndMetricsFunc(s.Addr, w, r, dns.RcodeRefused)
-				return
-			}
 			if r.Question[0].Qtype != dns.TypeDS {
 				if h.FilterFunc == nil {
 					rcode, _ := h.pluginChain.ServeDNS(ctx, w, r)
@@ -349,13 +338,8 @@ const (
 	udp = 1
 )
 
-type (
-	// Key is the context key for the current server added to the context.
-	Key struct{}
-
-	// LoopKey is the context key to detect server wide loops.
-	LoopKey struct{}
-)
+// Key is the context key for the current server added to the context.
+type Key struct{}
 
 // EnableChaos is a map with plugin names for which we should open CH class queries as we block these by default.
 var EnableChaos = map[string]struct{}{

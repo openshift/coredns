@@ -80,7 +80,7 @@ func (t *MockTracer) RegisterExtractor(format interface{}, extractor Extractor) 
 func (t *MockTracer) Inject(sm opentracing.SpanContext, format interface{}, carrier interface{}) error {
 	spanContext, ok := sm.(MockSpanContext)
 	if !ok {
-		return opentracing.ErrInvalidSpanContext
+		return opentracing.ErrInvalidCarrier
 	}
 	injector, ok := t.injectors[format]
 	if !ok {

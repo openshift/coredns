@@ -1,10 +1,7 @@
 package object
 
 import (
-	"fmt"
-
 	api "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -15,7 +12,7 @@ type Service struct {
 	Name         string
 	Namespace    string
 	Index        string
-	ClusterIPs   []string
+	ClusterIP    string
 	Type         api.ServiceType
 	ExternalName string
 	Ports        []api.ServicePort
@@ -26,31 +23,32 @@ type Service struct {
 	*Empty
 }
 
-// ServiceKey returns a string using for the index.
+// ServiceKey return a string using for the index.
 func ServiceKey(name, namespace string) string { return name + "." + namespace }
 
-// ToService converts an api.Service to a *Service.
-func ToService(obj meta.Object) (meta.Object, error) {
+// ToService returns a function that converts an api.Service to a *Service.
+func ToService(skipCleanup bool) ToFunc {
+	return func(obj interface{}) interface{} {
+		return toService(skipCleanup, obj)
+	}
+}
+
+func toService(skipCleanup bool, obj interface{}) interface{} {
 	svc, ok := obj.(*api.Service)
 	if !ok {
-		return nil, fmt.Errorf("unexpected object %v", obj)
+		return nil
 	}
+
 	s := &Service{
 		Version:      svc.GetResourceVersion(),
 		Name:         svc.GetName(),
 		Namespace:    svc.GetNamespace(),
 		Index:        ServiceKey(svc.GetName(), svc.GetNamespace()),
+		ClusterIP:    svc.Spec.ClusterIP,
 		Type:         svc.Spec.Type,
 		ExternalName: svc.Spec.ExternalName,
 
 		ExternalIPs: make([]string, len(svc.Status.LoadBalancer.Ingress)+len(svc.Spec.ExternalIPs)),
-	}
-
-	if len(svc.Spec.ClusterIPs) > 0 {
-		s.ClusterIPs = make([]string, len(svc.Spec.ClusterIPs))
-		copy(s.ClusterIPs, svc.Spec.ClusterIPs)
-	} else {
-		s.ClusterIPs = []string{svc.Spec.ClusterIP}
 	}
 
 	if len(svc.Spec.Ports) == 0 {
@@ -63,22 +61,14 @@ func ToService(obj meta.Object) (meta.Object, error) {
 
 	li := copy(s.ExternalIPs, svc.Spec.ExternalIPs)
 	for i, lb := range svc.Status.LoadBalancer.Ingress {
-		if lb.IP != "" {
-			s.ExternalIPs[li+i] = lb.IP
-			continue
-		}
-		s.ExternalIPs[li+i] = lb.Hostname
-
+		s.ExternalIPs[li+i] = lb.IP
 	}
 
-	*svc = api.Service{}
+	if !skipCleanup {
+		*svc = api.Service{}
+	}
 
-	return s, nil
-}
-
-// Headless returns true if the service is headless
-func (s *Service) Headless() bool {
-	return s.ClusterIPs[0] == api.ClusterIPNone
+	return s
 }
 
 var _ runtime.Object = &Service{}
@@ -90,13 +80,12 @@ func (s *Service) DeepCopyObject() runtime.Object {
 		Name:         s.Name,
 		Namespace:    s.Namespace,
 		Index:        s.Index,
+		ClusterIP:    s.ClusterIP,
 		Type:         s.Type,
 		ExternalName: s.ExternalName,
-		ClusterIPs:   make([]string, len(s.ClusterIPs)),
 		Ports:        make([]api.ServicePort, len(s.Ports)),
 		ExternalIPs:  make([]string, len(s.ExternalIPs)),
 	}
-	copy(s1.ClusterIPs, s.ClusterIPs)
 	copy(s1.Ports, s.Ports)
 	copy(s1.ExternalIPs, s.ExternalIPs)
 	return s1

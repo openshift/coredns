@@ -1,7 +1,7 @@
 // Unless explicitly stated otherwise all files in this repository are licensed
 // under the Apache License Version 2.0.
 // This product includes software developed at Datadog (https://www.datadoghq.com/).
-// Copyright 2016-2020 Datadog, Inc.
+// Copyright 2016-2019 Datadog, Inc.
 
 // Package log provides logging utilities for the tracer.
 package log
@@ -38,7 +38,6 @@ var (
 
 // UseLogger sets l as the active logger.
 func UseLogger(l ddtrace.Logger) {
-	Flush()
 	mu.Lock()
 	defer mu.Unlock()
 	logger = l
@@ -65,11 +64,6 @@ func Debug(fmt string, a ...interface{}) {
 // Warn prints a warning message.
 func Warn(fmt string, a ...interface{}) {
 	printMsg("WARN", fmt, a...)
-}
-
-// Info prints an informational message.
-func Info(fmt string, a ...interface{}) {
-	printMsg("INFO", fmt, a...)
 }
 
 var (

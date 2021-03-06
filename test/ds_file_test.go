@@ -35,8 +35,9 @@ func TestLookupDS(t *testing.T) {
 	defer rm()
 
 	corefile := `miek.nl:0 {
-		file ` + name + `
-	}`
+       file ` + name + `
+}
+`
 
 	i, udp, _, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {

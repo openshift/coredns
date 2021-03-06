@@ -2,7 +2,6 @@ package test
 
 import (
 	"testing"
-	"time"
 
 	"github.com/miekg/dns"
 )
@@ -16,7 +15,8 @@ func TestProxyThreeWay(t *testing.T) {
 		erratic {
 			drop 2
 		}
-	}`
+	}
+`
 
 	up1, err := CoreDNSServer(corefileUp1)
 	if err != nil {
@@ -26,7 +26,8 @@ func TestProxyThreeWay(t *testing.T) {
 
 	corefileUp2 := `example.org:0 {
 		whoami
-	}`
+	}
+`
 
 	up2, err := CoreDNSServer(corefileUp2)
 	if err != nil {
@@ -62,11 +63,9 @@ func TestProxyThreeWay(t *testing.T) {
 
 	m := new(dns.Msg)
 	m.SetQuestion("example.org.", dns.TypeA)
-	c := new(dns.Client)
-	c.Timeout = 10 * time.Millisecond
 
 	for i := 0; i < 10; i++ {
-		r, _, err := c.Exchange(m, addr)
+		r, err := dns.Exchange(m, addr)
 		if err != nil {
 			continue
 		}

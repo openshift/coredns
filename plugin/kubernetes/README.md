@@ -40,6 +40,7 @@ kubernetes [ZONES...] {
     endpoint_pod_names
     ttl TTL
     noendpoints
+    transfer to ADDRESS...
     fallthrough [ZONES...]
     ignore empty_service
 }
@@ -54,7 +55,7 @@ kubernetes [ZONES...] {
    If this option is omitted all namespaces are exposed
 * `namespace_labels` **EXPRESSION** only expose the records for Kubernetes namespaces that match this label selector.
    The label selector syntax is described in the
-   [Kubernetes User Guide - Labels](https://kubernetes.io/docs/user-guide/labels/). An example that
+   [Kubernetes User Guide - Labels](http://kubernetes.io/docs/user-guide/labels/). An example that
    only exposes namespaces labeled as "istio-injection=enabled", would use:
    `labels istio-injection=enabled`.
 * `labels` **EXPRESSION** only exposes the records for Kubernetes objects that match this label selector.
@@ -89,6 +90,11 @@ kubernetes [ZONES...] {
   0 seconds, and the maximum is capped at 3600 seconds. Setting TTL to 0 will prevent records from being cached.
 * `noendpoints` will turn off the serving of endpoint records by disabling the watch on endpoints.
   All endpoint queries and headless service queries will result in an NXDOMAIN.
+* `transfer` enables zone transfers. It may be specified multiples times. `To` signals the direction
+  (only `to` is allowed). **ADDRESS** must be denoted in CIDR notation (127.0.0.1/32 etc.) or just as
+  plain addresses. The special wildcard `*` means: the entire internet.
+  Sending DNS notifies is not supported.
+  [Deprecated](https://github.com/kubernetes/dns/blob/master/docs/specification.md#26---deprecated-records) pod records in the subdomain `pod.cluster.local` are not transferred.
 * `fallthrough` **[ZONES...]** If a query for a record in the zones for which the plugin is authoritative
   results in NXDOMAIN, normally that is what the response will be. However, if you specify this option,
   the query will instead be passed on down the plugin chain, which can include another plugin to handle
@@ -98,8 +104,6 @@ kubernetes [ZONES...] {
 * `ignore empty_service` returns NXDOMAIN for services without any ready endpoint addresses (e.g., ready pods).
   This allows the querying pod to continue searching for the service in the search path.
   The search path could, for example, include another Kubernetes cluster.
-
-Enabling zone transfer is done by using the *transfer* plugin.
 
 ## Ready
 
@@ -169,8 +173,7 @@ upstreamNameservers: |
 
 The *kubernetes* plugin can be used in conjunction with the *autopath* plugin.  Using this
 feature enables server-side domain search path completion in Kubernetes clusters.  Note: `pods` must
-be set to `verified` for this to function properly. Furthermore, the remote IP address in the DNS
-packet received by CoreDNS must be the IP address of the Pod that sent the request.
+be set to `verified` for this to function properly.
 
     cluster.local {
         autopath @kubernetes
@@ -203,20 +206,14 @@ or the word "any"), then that label will match all values.  The labels that acce
 The kubernetes plugin will publish the following metadata, if the *metadata*
 plugin is also enabled:
 
- * `kubernetes/endpoint`: the endpoint name in the query
- * `kubernetes/kind`: the resource kind (pod or svc) in the query
- * `kubernetes/namespace`: the namespace in the query
- * `kubernetes/port-name`: the port name in an SRV query
- * `kubernetes/protocol`: the protocol in an SRV query
- * `kubernetes/service`: the service name in the query
- * `kubernetes/client-namespace`: the client pod's namespace (see requirements below)
- * `kubernetes/client-pod-name`: the client pod's name (see requirements below)
-
-The `kubernetes/client-namespace` and `kubernetes/client-pod-name` metadata work by reconciling the
-client IP address in the DNS request packet to a known pod IP address. Therefore the following is required:
- * `pods verified` mode must be enabled
- * the remote IP address in the DNS packet received by CoreDNS must be the IP address
-   of the Pod that sent the request.
+ * kubernetes/endpoint: the endpoint name in the query
+ * kubernetes/kind: the resource kind (pod or svc) in the query
+ * kubernetes/namespace: the namespace in the query
+ * kubernetes/port-name: the port name in an SRV query
+ * kubernetes/protocol: the protocol in an SRV query
+ * kubernetes/service: the service name in the query
+ * kubernetes/client-namespace: the client pod's namespace, if `pods verified` mode is enabled
+ * kubernetes/client-pod-name: the client pod's name, if `pods verified` mode is enabled
 
 ## Metrics
 
@@ -233,9 +230,4 @@ If monitoring is enabled (via the *prometheus* plugin) then the following metric
 
 ## Bugs
 
-The duration metric only supports the "headless\_with\_selector" service currently.
-
-## See Also
-
-See the *autopath* plugin to enable search path optimizations. And use the *transfer* plugin to
-enable outgoing zone transfers.
+The duration metric only supports the "headless_with_selector" service currently.

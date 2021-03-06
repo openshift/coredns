@@ -3,7 +3,7 @@ package reload
 import (
 	"testing"
 
-	"github.com/coredns/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func TestSetupReload(t *testing.T) {

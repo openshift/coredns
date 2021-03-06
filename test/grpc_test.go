@@ -5,17 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/coredns/coredns/pb"
-
 	"github.com/miekg/dns"
 	"google.golang.org/grpc"
+
+	"github.com/coredns/coredns/pb"
 )
 
 func TestGrpc(t *testing.T) {
 	corefile := `grpc://.:0 {
 		whoami
-	}`
-
+}
+`
 	g, _, tcp, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {
 		t.Fatalf("Could not get CoreDNS serving instance: %s", err)

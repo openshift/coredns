@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coredns/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func TestSetupEtcd(t *testing.T) {

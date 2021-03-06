@@ -4,16 +4,17 @@ import (
 	"testing"
 
 	// Plug in CoreDNS, needed for AppVersion and AppName in this test.
-	"github.com/coredns/caddy"
 	_ "github.com/coredns/coredns/coremain"
 
+	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 )
 
 func TestChaos(t *testing.T) {
 	corefile := `.:0 {
 		chaos
-	}`
+}
+`
 
 	i, udp, _, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {
@@ -32,6 +33,6 @@ func TestChaos(t *testing.T) {
 	chTxt := resp.Answer[0].(*dns.TXT).Txt[0]
 	version := caddy.AppName + "-" + caddy.AppVersion
 	if chTxt != version {
-		t.Fatalf("Expected version to be %s, got %s", version, chTxt)
+		t.Fatalf("Expected version to bo %s, got %s", version, chTxt)
 	}
 }

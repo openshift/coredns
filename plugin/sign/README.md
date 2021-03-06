@@ -11,13 +11,13 @@ added. The signatures that sign the resource records sets have an expiration dat
 signing process must be repeated before this expiration data is reached. Otherwise the zone's data
 will go BAD (RFC 4035, Section 5.5). The *sign* plugin takes care of this.
 
-Only NSEC is supported, *sign* does *not* support NSEC3.
+Only NSEC is supported, *sign* does not support NSEC3.
 
 *Sign* works in conjunction with the *file* and *auto* plugins; this plugin **signs** the zones
 files, *auto* and *file* **serve** the zones *data*.
 
 For this plugin to work at least one Common Signing Key, (see coredns-keygen(1)) is needed. This key
-(or keys) will be used to sign the entire zone. *Sign* does *not* support the ZSK/KSK split, nor will
+(or keys) will be used to sign the entire zone. *Sign* does not support the ZSK/KSK split, nor will
 it do key or algorithm rollovers - it just signs.
 
 *Sign* will:
@@ -32,7 +32,7 @@ it do key or algorithm rollovers - it just signs.
     Both these dates are only checked on the SOA's signature(s).
 
  *  Create RRSIGs that have an inception of -3 hours (minus a jitter between 0 and 18 hours)
-    and a expiration of +32 (plus a jitter between 0 and 5 days) days for every given DNSKEY.
+    and a expiration of +32 days for every given DNSKEY.
 
  *  Add NSEC records for all names in the zone. The TTL for these is the negative cache TTL from the
     SOA record.
@@ -151,7 +151,7 @@ Forcibly resigning a zone can be accomplished by removing the signed zone file (
 on serving it from memory), and sending SIGUSR1 to the process to make it reload and resign the zone
 file.
 
-## See Also
+## Also See
 
 The DNSSEC RFCs: RFC 4033, RFC 4034 and RFC 4035. And the BCP on DNSSEC, RFC 6781. Further more the
 manual pages coredns-keygen(1) and dnssec-keygen(8). And the *file* plugin's documentation.

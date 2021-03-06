@@ -3,10 +3,10 @@ package external
 import (
 	"strconv"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
-	"github.com/coredns/coredns/plugin/pkg/upstream"
+
+	"github.com/caddyserver/caddy"
 )
 
 func init() { plugin.Register("k8s_external", setup) }
@@ -29,8 +29,6 @@ func setup(c *caddy.Controller) error {
 		}
 		return nil
 	})
-
-	e.upstream = upstream.New()
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		e.Next = next

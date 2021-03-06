@@ -3,7 +3,7 @@ package kubernetes
 import (
 	"testing"
 
-	"github.com/coredns/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func TestKubernetesParseReverseZone(t *testing.T) {

@@ -3,7 +3,7 @@ package azure
 import (
 	"testing"
 
-	"github.com/coredns/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func TestSetup(t *testing.T) {
@@ -18,30 +18,34 @@ func TestSetup(t *testing.T) {
     tenant
 }`, true},
 		{`azure resource_set:zone {
-    tenant abc
-}`, false},
+    tenant
+}`, true},
 		{`azure resource_set:zone {
     client
 }`, true},
 		{`azure resource_set:zone {
-    client abc
-}`, false},
+    secret
+}`, true},
 		{`azure resource_set:zone {
     subscription
 }`, true},
 		{`azure resource_set:zone {
-    subscription abc
-}`, false},
+    upstream 10.0.0.1
+}`, true},
+
 		{`azure resource_set:zone {
-    foo
+    upstream
+}`, true},
+		{`azure resource_set:zone {
+    foobar
 }`, true},
 		{`azure resource_set:zone {
     tenant tenant_id
     client client_id
     secret client_secret
     subscription subscription_id
-    access public
 }`, false},
+
 		{`azure resource_set:zone {
     fallthrough
 }`, false},
@@ -52,19 +56,16 @@ func TestSetup(t *testing.T) {
 			fallthrough
 		}`, true},
 		{`azure resource_set:zone,zone2 {
-			access private
+			fallthrough
 		}`, false},
-		{`azure resource-set:zone {
-			access public
-		}`, false},
-		{`azure resource-set:zone {
-			access foo
+		{`azure resource-set {
+			fallthrough
 		}`, true},
 	}
 
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.body)
-		if _, _, _, _, err := parse(c); (err == nil) == test.expectedError {
+		if _, _, _, err := parse(c); (err == nil) == test.expectedError {
 			t.Fatalf("Unexpected errors: %v in test: %d\n\t%s", err, i, test.body)
 		}
 	}

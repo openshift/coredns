@@ -8,44 +8,38 @@ import (
 	"sync/atomic"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metrics"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
-	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
-	_ "github.com/coredns/coredns/plugin/pkg/trace" // Plugin the trace package.
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+
+	// Plugin the trace package.
+	_ "github.com/coredns/coredns/plugin/pkg/trace"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
-	zipkinot "github.com/openzipkin-contrib/zipkin-go-opentracing"
-	"github.com/openzipkin/zipkin-go"
-	zipkinhttp "github.com/openzipkin/zipkin-go/reporter/http"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
-	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
+	zipkin "github.com/openzipkin-contrib/zipkin-go-opentracing"
 )
 
 const (
-	tagName                 = "coredns.io/name"
-	tagType                 = "coredns.io/type"
-	tagRcode                = "coredns.io/rcode"
-	tagProto                = "coredns.io/proto"
-	tagRemote               = "coredns.io/remote"
-	defaultTopLevelSpanName = "servedns"
+	tagName  = "coredns.io/name"
+	tagType  = "coredns.io/type"
+	tagRcode = "coredns.io/rcode"
 )
 
 type trace struct {
-	count uint64 // as per Go spec, needs to be first element in a struct
-
-	Next                 plugin.Handler
-	Endpoint             string
-	EndpointType         string
-	tracer               ot.Tracer
-	serviceEndpoint      string
-	serviceName          string
-	clientServer         bool
-	every                uint64
-	datadogAnalyticsRate float64
-	Once                 sync.Once
+	Next            plugin.Handler
+	Endpoint        string
+	EndpointType    string
+	tracer          ot.Tracer
+	serviceEndpoint string
+	serviceName     string
+	clientServer    bool
+	every           uint64
+	count           uint64
+	Once            sync.Once
 }
 
 func (t *trace) Tracer() ot.Tracer {
@@ -60,13 +54,7 @@ func (t *trace) OnStartup() error {
 		case "zipkin":
 			err = t.setupZipkin()
 		case "datadog":
-			tracer := opentracer.New(
-				tracer.WithAgentAddr(t.Endpoint),
-				tracer.WithDebugMode(log.D.Value()),
-				tracer.WithGlobalTag(ext.SpanTypeDNS, true),
-				tracer.WithServiceName(t.serviceName),
-				tracer.WithAnalyticsRate(t.datadogAnalyticsRate),
-			)
+			tracer := opentracer.New(tracer.WithAgentAddr(t.Endpoint), tracer.WithServiceName(t.serviceName), tracer.WithDebugMode(true))
 			t.tracer = tracer
 		default:
 			err = fmt.Errorf("unknown endpoint type: %s", t.EndpointType)
@@ -76,20 +64,15 @@ func (t *trace) OnStartup() error {
 }
 
 func (t *trace) setupZipkin() error {
-	reporter := zipkinhttp.NewReporter(t.Endpoint)
-	recorder, err := zipkin.NewEndpoint(t.serviceName, t.serviceEndpoint)
-	if err != nil {
-		log.Warningf("build Zipkin endpoint found err: %v", err)
-	}
-	tracer, err := zipkin.NewTracer(
-		reporter,
-		zipkin.WithLocalEndpoint(recorder),
-		zipkin.WithSharedSpans(t.clientServer),
-	)
+
+	collector, err := zipkin.NewHTTPCollector(t.Endpoint)
 	if err != nil {
 		return err
 	}
-	t.tracer = zipkinot.Wrap(tracer)
+
+	recorder := zipkin.NewRecorder(collector, false, t.serviceEndpoint, t.serviceName)
+	t.tracer, err = zipkin.NewTracer(recorder, zipkin.ClientServerSameSpan(t.clientServer))
+
 	return err
 }
 
@@ -112,7 +95,7 @@ func (t *trace) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	}
 
 	req := request.Request{W: w, Req: r}
-	span = t.Tracer().StartSpan(defaultTopLevelSpanName)
+	span = t.Tracer().StartSpan(spanName(ctx, req))
 	defer span.Finish()
 
 	rw := dnstest.NewRecorder(w)
@@ -121,9 +104,11 @@ func (t *trace) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 
 	span.SetTag(tagName, req.Name())
 	span.SetTag(tagType, req.Type())
-	span.SetTag(tagProto, req.Proto())
-	span.SetTag(tagRemote, req.IP())
 	span.SetTag(tagRcode, rcode.ToString(rw.Rcode))
 
 	return status, err
+}
+
+func spanName(ctx context.Context, req request.Request) string {
+	return "servedns:" + metrics.WithServer(ctx) + " " + req.Name()
 }

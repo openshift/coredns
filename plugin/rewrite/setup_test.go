@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/coredns/caddy"
+	"github.com/caddyserver/caddy"
 )
 
 func TestParse(t *testing.T) {

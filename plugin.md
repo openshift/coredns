@@ -31,7 +31,7 @@ code.
 See a couple of blog posts on how to write and add plugin to CoreDNS:
 
 * <https://blog.coredns.io/2017/03/01/how-to-add-plugins-to-coredns/>
-* <https://blog.coredns.io/2016/12/19/writing-plugins-for-coredns/>, slightly older, but useful.
+* <https://blog.coredns.io/2016/12/19/writing-plugin-for-coredns/>, slightly older, but useful.
 
 ## Logging
 
@@ -56,7 +56,7 @@ server.
 ## Metrics
 
 When exporting metrics the *Namespace* should be `plugin.Namespace` (="coredns"), and the
-*Subsystem* must be the name of the plugin. The README.md for the plugin should then also contain
+*Subsystem* should be the name of the plugin. The README.md for the plugin should then also contain
 a *Metrics* section detailing the metrics.
 
 ## Readiness
@@ -69,22 +69,13 @@ works, and implement the `ready.Readiness` interface.
 See the plugin/pkg/reuseport for `Listen` and `ListenPacket` functions. Using these functions makes
 your plugin handle reload events better.
 
-## Context
-
-Every request get a context.Context these are pre-filled with 2 values:
-
-* `Key`: holds a pointer to the current server, this can be useful for logging or metrics. It is
-  infact used in the *metrics* plugin to tie a request to a specific (internal) server.
-* `LoopKey`: holds an integer to detect loops within the current context. The *file* plugin uses
-  this to detect loops when resolving CNAMEs.
-
 ## Documentation
 
 Each plugin should have a README.md explaining what the plugin does and how it is configured. The
 file should have the following layout:
 
 * Title: use the plugin's name
-* Subsection titled: "Name"
+* Subsection titled: "Named"
     with *PLUGIN* - one line description.
 * Subsection titled: "Description" has a longer description.
 * Subsection titled: "Syntax", syntax and supported directives.

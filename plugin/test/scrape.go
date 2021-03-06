@@ -30,8 +30,9 @@ import (
 	"strconv"
 
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
+
+	dto "github.com/prometheus/client_model/go"
 )
 
 type (
@@ -77,7 +78,7 @@ func Scrape(url string) []*MetricFamily {
 	return result
 }
 
-// ScrapeMetricAsInt provides a sum of all metrics collected for the name and label provided.
+// ScrapeMetricAsInt provide a sum of all metrics collected for the name and label provided.
 // if the metric is not a numeric value, it will be counted a 0.
 func ScrapeMetricAsInt(addr string, name string, label string, nometricvalue int) int {
 

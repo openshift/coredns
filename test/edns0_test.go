@@ -9,7 +9,8 @@ import (
 func TestEDNS0(t *testing.T) {
 	corefile := `.:0 {
 		whoami
-	}`
+}
+`
 
 	i, udp, _, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {

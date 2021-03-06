@@ -12,9 +12,9 @@ import (
 )
 
 func TestLargeAXFR(t *testing.T) {
-	// Build a zone in text format. It contains 6.4K AAAA RRs. (this number is rather random)
+	// Build a large zone in text format.  It contains 64K AAAA RRs.
 	var sb strings.Builder
-	const numAAAAs = 6553
+	const numAAAAs = 65536
 	sb.WriteString("example.com. IN SOA . . 1 60 60 60 60\n")
 	sb.WriteString("example.com. IN NS ns.example.\n")
 	for i := 0; i < numAAAAs; i++ {
@@ -29,12 +29,11 @@ func TestLargeAXFR(t *testing.T) {
 	defer rm()
 
 	corefile := `example.com:0 {
-		file ` + name + `
-		transfer {
-			to *
-		}
-	}`
-
+       file ` + name + ` {
+           transfer to *
+       }
+}
+`
 	// Start server, and send an AXFR query to the TCP port. We set the deadline to prevent the test from hanging.
 	i, _, tcp, err := CoreDNSServerAndPorts(corefile)
 	if err != nil {

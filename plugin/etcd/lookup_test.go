@@ -131,9 +131,9 @@ var dnsTestCases = []test.Case{
 	},
 	// TXT Test
 	{
-		Qname: "txt.server1.prod.region1.skydns.test.", Qtype: dns.TypeTXT,
+		Qname: "server1.prod.region1.skydns.test.", Qtype: dns.TypeTXT,
 		Answer: []dns.RR{
-			test.TXT("txt.server1.prod.region1.skydns.test. 303 IN TXT sometext"),
+			test.TXT("server1.prod.region1.skydns.test. 303 IN TXT sometext"),
 		},
 	},
 	// Wildcard Test

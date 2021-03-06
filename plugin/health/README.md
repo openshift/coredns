@@ -7,7 +7,7 @@
 ## Description
 
 Enabled process wide health endpoint. When CoreDNS is up and running this returns a 200 OK HTTP
-status code. The health is exported, by default, on port 8080/health.
+status code. The health is exported, by default, on port 8080/health .
 
 ## Syntax
 
@@ -26,8 +26,8 @@ health [ADDRESS] {
 }
 ~~~
 
-* Where `lameduck` will delay shutdown for **DURATION**. /health will still answer 200 OK.
-  Note: The *ready* plugin will not answer OK while CoreDNS is in lameduck mode prior to shutdown.
+* Where `lameduck` will make the process unhealthy then *wait* for **DURATION** before the process
+  shuts down.
 
 If you have multiple Server Blocks, *health* can only be enabled in one of them (as it is process
 wide). If you really need multiple endpoints, you must run health endpoints on different ports:

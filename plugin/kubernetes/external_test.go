@@ -79,17 +79,17 @@ func TestExternal(t *testing.T) {
 
 type external struct{}
 
-func (external) HasSynced() bool                                                   { return true }
-func (external) Run()                                                              {}
-func (external) Stop() error                                                       { return nil }
-func (external) EpIndexReverse(string) []*object.Endpoints                         { return nil }
-func (external) SvcIndexReverse(string) []*object.Service                          { return nil }
-func (external) Modified() int64                                                   { return 0 }
-func (external) EpIndex(s string) []*object.Endpoints                              { return nil }
-func (external) EndpointsList() []*object.Endpoints                                { return nil }
+func (external) HasSynced() bool                              { return true }
+func (external) Run()                                         {}
+func (external) Stop() error                                  { return nil }
+func (external) EpIndexReverse(string) []*object.Endpoints    { return nil }
+func (external) SvcIndexReverse(string) []*object.Service     { return nil }
+func (external) Modified() int64                              { return 0 }
+func (external) EpIndex(s string) []*object.Endpoints         { return nil }
+func (external) EndpointsList() []*object.Endpoints           { return nil }
 func (external) GetNodeByName(ctx context.Context, name string) (*api.Node, error) { return nil, nil }
-func (external) SvcIndex(s string) []*object.Service                               { return svcIndexExternal[s] }
-func (external) PodIndex(string) []*object.Pod                                     { return nil }
+func (external) SvcIndex(s string) []*object.Service          { return svcIndexExternal[s] }
+func (external) PodIndex(string) []*object.Pod                { return nil }
 
 func (external) GetNamespaceByName(name string) (*api.Namespace, error) {
 	return &api.Namespace{
@@ -105,7 +105,7 @@ var svcIndexExternal = map[string][]*object.Service{
 			Name:        "svc1",
 			Namespace:   "testns",
 			Type:        api.ServiceTypeClusterIP,
-			ClusterIPs:  []string{"10.0.0.1"},
+			ClusterIP:   "10.0.0.1",
 			ExternalIPs: []string{"1.2.3.4"},
 			Ports:       []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
 		},
@@ -115,7 +115,7 @@ var svcIndexExternal = map[string][]*object.Service{
 			Name:        "svc6",
 			Namespace:   "testns",
 			Type:        api.ServiceTypeClusterIP,
-			ClusterIPs:  []string{"10.0.0.3"},
+			ClusterIP:   "10.0.0.3",
 			ExternalIPs: []string{"1:2::5"},
 			Ports:       []api.ServicePort{{Name: "http", Protocol: "tcp", Port: 80}},
 		},

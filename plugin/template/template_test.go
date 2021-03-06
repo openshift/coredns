@@ -7,12 +7,12 @@ import (
 	"testing"
 	gotmpl "text/template"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/plugin/metadata"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 	"github.com/coredns/coredns/plugin/test"
 
+	"github.com/caddyserver/caddy"
 	"github.com/miekg/dns"
 )
 
@@ -22,14 +22,6 @@ func TestHandler(t *testing.T) {
 		answer: []*gotmpl.Template{gotmpl.Must(gotmpl.New("answer").Parse("{{ .Name }} 60 IN A 10.{{ .Group.b }}.{{ .Group.c }}.{{ .Group.d }}"))},
 		qclass: dns.ClassANY,
 		qtype:  dns.TypeANY,
-		fall:   fall.Root,
-		zones:  []string{"."},
-	}
-	exampleDomainIPATemplate := template{
-		regex:  []*regexp.Regexp{regexp.MustCompile(".*")},
-		answer: []*gotmpl.Template{gotmpl.Must(gotmpl.New("answer").Parse("{{ .Name }} 60 IN A {{ .Remote }}"))},
-		qclass: dns.ClassINET,
-		qtype:  dns.TypeA,
 		fall:   fall.Root,
 		zones:  []string{"."},
 	}
@@ -201,25 +193,6 @@ func TestHandler(t *testing.T) {
 			expectedCode: dns.RcodeServerFailure,
 			expectedErr:  `dns: not a TTL: "test.example." at line: 1:13`,
 			verifyResponse: func(r *dns.Msg) error {
-				return nil
-			},
-		},
-		{
-			name:   "ExampleIPMatch",
-			tmpl:   exampleDomainIPATemplate,
-			qclass: dns.ClassINET,
-			qtype:  dns.TypeA,
-			qname:  "test.example.",
-			verifyResponse: func(r *dns.Msg) error {
-				if len(r.Answer) != 1 {
-					return fmt.Errorf("expected 1 answer, got %v", len(r.Answer))
-				}
-				if r.Answer[0].Header().Rrtype != dns.TypeA {
-					return fmt.Errorf("expected an A record answer, got %v", dns.TypeToString[r.Answer[0].Header().Rrtype])
-				}
-				if r.Answer[0].(*dns.A).A.String() != "10.240.0.1" {
-					return fmt.Errorf("expected an A record for 10.95.12.8, got %v", r.Answer[0].String())
-				}
 				return nil
 			},
 		},

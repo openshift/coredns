@@ -2,6 +2,8 @@ package kubernetes
 
 import (
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+	"github.com/coredns/coredns/request"
+
 	"github.com/miekg/dns"
 )
 
@@ -24,13 +26,13 @@ type recordRequest struct {
 // parseRequest parses the qname to find all the elements we need for querying k8s. Anything
 // that is not parsed will have the wildcard "*" value (except r.endpoint).
 // Potential underscores are stripped from _port and _protocol.
-func parseRequest(name, zone string) (r recordRequest, err error) {
+func parseRequest(state request.Request) (r recordRequest, err error) {
 	// 3 Possible cases:
 	// 1. _port._protocol.service.namespace.pod|svc.zone
 	// 2. (endpoint): endpoint.service.namespace.pod|svc.zone
 	// 3. (service): service.namespace.pod|svc.zone
 
-	base, _ := dnsutil.TrimZone(name, zone)
+	base, _ := dnsutil.TrimZone(state.Name(), state.Zone)
 	// return NODATA for apex queries
 	if base == "" || base == Svc || base == Pod {
 		return r, nil
@@ -99,7 +101,7 @@ func stripUnderscore(s string) string {
 	return s[1:]
 }
 
-// String returns a string representation of r, it just returns all fields concatenated with dots.
+// String return a string representation of r, it just returns all fields concatenated with dots.
 // This is mostly used in tests.
 func (r recordRequest) String() string {
 	s := r.port

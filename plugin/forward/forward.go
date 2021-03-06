@@ -8,12 +8,10 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"sync/atomic"
 	"time"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/debug"
-	"github.com/coredns/coredns/plugin/dnstap"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/request"
 
@@ -26,8 +24,6 @@ var log = clog.NewWithPlugin("forward")
 // Forward represents a plugin instance that can proxy requests to another (DNS) server. It has a list
 // of proxies each representing one upstream proxy.
 type Forward struct {
-	concurrent int64 // atomic counters need to be first in struct for proper alignment
-
 	proxies    []*Proxy
 	p          Policy
 	hcInterval time.Duration
@@ -39,22 +35,15 @@ type Forward struct {
 	tlsServerName string
 	maxfails      uint32
 	expire        time.Duration
-	maxConcurrent int64
 
 	opts options // also here for testing
-
-	// ErrLimitExceeded indicates that a query was rejected because the number of concurrent queries has exceeded
-	// the maximum allowed (maxConcurrent)
-	ErrLimitExceeded error
-
-	tapPlugin *dnstap.Dnstap // when the dnstap plugin is loaded, we use to this to send messages out.
 
 	Next plugin.Handler
 }
 
 // New returns a new Forward.
 func New() *Forward {
-	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: ".", hcInterval: hcInterval, opts: options{forceTCP: false, preferUDP: false, hcRecursionDesired: true}}
+	f := &Forward{maxfails: 2, tlsConfig: new(tls.Config), expire: defaultExpire, p: new(random), from: ".", hcInterval: hcInterval}
 	return f
 }
 
@@ -76,15 +65,6 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	state := request.Request{W: w, Req: r}
 	if !f.match(state) {
 		return plugin.NextOrFailure(f.Name(), f.Next, ctx, w, r)
-	}
-
-	if f.maxConcurrent > 0 {
-		count := atomic.AddInt64(&(f.concurrent), 1)
-		defer atomic.AddInt64(&(f.concurrent), -1)
-		if count > f.maxConcurrent {
-			MaxConcurrentRejectCount.Add(1)
-			return dns.RcodeRefused, f.ErrLimitExceeded
-		}
 	}
 
 	fails := 0
@@ -143,10 +123,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		if child != nil {
 			child.Finish()
 		}
-
-		if f.tapPlugin != nil {
-			toDnstap(f, proxy.addr, state, opts, ret, start)
-		}
+		taperr := toDnstap(ctx, proxy.addr, f, state, ret, start)
 
 		upstreamErr = err
 
@@ -169,11 +146,11 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			formerr := new(dns.Msg)
 			formerr.SetRcode(state.Req, dns.RcodeFormatError)
 			w.WriteMsg(formerr)
-			return 0, nil
+			return 0, taperr
 		}
 
 		w.WriteMsg(ret)
-		return 0, nil
+		return 0, taperr
 	}
 
 	if upstreamErr != nil {
@@ -224,9 +201,8 @@ var (
 
 // options holds various options that can be set.
 type options struct {
-	forceTCP           bool
-	preferUDP          bool
-	hcRecursionDesired bool
+	forceTCP  bool
+	preferUDP bool
 }
 
-var defaultTimeout = 5 * time.Second
+const defaultTimeout = 5 * time.Second

@@ -57,7 +57,7 @@ k8s_external [ZONE...] {
 * **APEX** is the name (DNS label) to use for the apex records; it defaults to `dns`.
 * `ttl` allows you to set a custom **TTL** for responses. The default is 5 (seconds).
 
-## Examples
+# Examples
 
 Enable names under `example.org` to be resolved to in-cluster DNS addresses.
 
@@ -84,7 +84,7 @@ spec:
 ~~~
 
 
-# See Also
+# Also See
 
 For some background see [resolve external IP address](https://github.com/kubernetes/dns/issues/242).
 And [A records for services with Load Balancer IP](https://github.com/coredns/coredns/issues/1851).

@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/miekg/dns"
+
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin/pkg/nonwriter"
 	"github.com/coredns/coredns/request"
-
-	"github.com/miekg/dns"
 )
 
 // Upstream is used to resolve CNAME or other external targets via CoreDNS itself.
@@ -25,13 +25,11 @@ func (u *Upstream) Lookup(ctx context.Context, state request.Request, name strin
 		return nil, fmt.Errorf("no full server is running")
 	}
 
-	size := state.Size()
-	do := state.Do()
 	req := new(dns.Msg)
 	req.SetQuestion(name, typ)
-	req.SetEdns0(uint16(size), do)
 
 	nw := nonwriter.New(state.W)
+
 	server.ServeDNS(ctx, nw, req)
 
 	return nw.Msg, nil

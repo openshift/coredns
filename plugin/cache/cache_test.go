@@ -46,19 +46,17 @@ var cacheTestCases = []cacheTestCase{
 	{
 		RecursionAvailable: true, AuthenticatedData: true,
 		Case: test.Case{
-			Qname: "miek.nl.", Qtype: dns.TypeMX,
+			Qname: "mIEK.nL.", Qtype: dns.TypeMX,
 			Answer: []dns.RR{
-				test.MX("miek.nl.	3600	IN	MX	1 aspmx.l.google.com."),
-				test.MX("miek.nl.	3600	IN	MX	10 aspmx2.googlemail.com."),
+				test.MX("mIEK.nL.	3600	IN	MX	1 aspmx.l.google.com."),
+				test.MX("mIEK.nL.	3600	IN	MX	10 aspmx2.googlemail.com."),
 			},
 		},
 		in: test.Case{
 			Qname: "mIEK.nL.", Qtype: dns.TypeMX,
 			Answer: []dns.RR{
-				test.MX("miek.nl.	3601	IN	MX	1 aspmx.l.google.com."),
-				test.MX("miek.nl.	3601	IN	MX	10 aspmx2.googlemail.com."),
-				// RRSIG must be here, because we are always doing DNSSEC lookups, and miek.nl MX is tested later in this list as well.
-				test.RRSIG("miek.nl.	3600	IN	RRSIG	MX 8 2 1800 20160521031301 20160421031301 12051 miek.nl. lAaEzB5teQLLKyDenatmyhca7blLRg9DoGNrhe3NReBZN5C5/pMQk8Jc u25hv2fW23/SLm5IC2zaDpp2Fzgm6Jf7e90/yLcwQPuE7JjS55WMF+HE LEh7Z6AEb+Iq4BWmNhUz6gPxD4d9eRMs7EAzk13o1NYi5/JhfL6IlaYy qkc="),
+				test.MX("mIEK.nL.	3601	IN	MX	1 aspmx.l.google.com."),
+				test.MX("mIEK.nL.	3601	IN	MX	10 aspmx2.googlemail.com."),
 			},
 		},
 		shouldCache: true,
@@ -138,7 +136,7 @@ var cacheTestCases = []cacheTestCase{
 				test.RRSIG("miek.nl.	1800	IN	RRSIG	MX 8 2 1800 20160521031301 20160421031301 12051 miek.nl. lAaEzB5teQLLKyDenatmyhca7blLRg9DoGNrhe3NReBZN5C5/pMQk8Jc u25hv2fW23/SLm5IC2zaDpp2Fzgm6Jf7e90/yLcwQPuE7JjS55WMF+HE LEh7Z6AEb+Iq4BWmNhUz6gPxD4d9eRMs7EAzk13o1NYi5/JhfL6IlaYy qkc="),
 			},
 		},
-		shouldCache: true,
+		shouldCache: false,
 	},
 	{
 		RecursionAvailable: true,
@@ -198,7 +196,7 @@ func TestCache(t *testing.T) {
 		state := request.Request{W: &test.ResponseWriter{}, Req: m}
 
 		mt, _ := response.Typify(m, utc)
-		valid, k := key(state.Name(), m, mt)
+		valid, k := key(state.Name(), m, mt, state.Do())
 
 		if valid {
 			crr.set(m, k, mt, c.pttl)
@@ -213,16 +211,14 @@ func TestCache(t *testing.T) {
 		}
 
 		if ok {
-			resp := i.toMsg(m, time.Now().UTC(), state.Do())
+			resp := i.toMsg(m, time.Now().UTC())
 
 			if err := test.Header(tc.Case, resp); err != nil {
-				t.Logf("Cache %v", resp)
 				t.Error(err)
 				continue
 			}
 
 			if err := test.Section(tc.Case, test.Answer, resp.Answer); err != nil {
-				t.Logf("Cache %v -- %v", test.Answer, resp.Answer)
 				t.Error(err)
 			}
 			if err := test.Section(tc.Case, test.Ns, resp.Ns); err != nil {
@@ -300,92 +296,6 @@ func TestServeFromStaleCache(t *testing.T) {
 	}
 }
 
-func TestNegativeStaleMaskingPositiveCache(t *testing.T) {
-	c := New()
-	c.staleUpTo = time.Minute * 10
-	c.Next = nxDomainBackend(60)
-
-	req := new(dns.Msg)
-	qname := "cached.org."
-	req.SetQuestion(qname, dns.TypeA)
-	ctx := context.TODO()
-
-	// Add an entry to Negative Cache": cached.org. = NXDOMAIN
-	expectedResult := dns.RcodeNameError
-	if ret, _ := c.ServeDNS(ctx, &test.ResponseWriter{}, req); ret != expectedResult {
-		t.Errorf("Test 0 Negative Cache Population: expecting %v; got %v", expectedResult, ret)
-	}
-
-	// Confirm item was added to negative cache and not to positive cache
-	if c.ncache.Len() == 0 {
-		t.Errorf("Test 0 Negative Cache Population: item not added to negative cache")
-	}
-	if c.pcache.Len() != 0 {
-		t.Errorf("Test 0 Negative Cache Population: item added to positive cache")
-	}
-
-	// Set the Backend to return non-cachable errors only
-	c.Next = plugin.HandlerFunc(func(context.Context, dns.ResponseWriter, *dns.Msg) (int, error) {
-		return 255, nil // Below, a 255 means we tried querying upstream.
-	})
-
-	// Confirm we get the NXDOMAIN from the negative cache, not the error form the backend
-	rec := dnstest.NewRecorder(&test.ResponseWriter{})
-	req = new(dns.Msg)
-	req.SetQuestion(qname, dns.TypeA)
-	expectedResult = dns.RcodeNameError
-	if c.ServeDNS(ctx, rec, req); rec.Rcode != expectedResult {
-		t.Errorf("Test 1 NXDOMAIN from Negative Cache: expecting %v; got %v", expectedResult, rec.Rcode)
-	}
-
-	// Jump into the future beyond when the negative cache item would go stale
-	// but before the item goes rotten (exceeds serve stale time)
-	c.now = func() time.Time { return time.Now().Add(time.Duration(5) * time.Minute) }
-
-	// Set Backend to return a positive NOERROR + A record response
-	c.Next = BackendHandler()
-
-	// Make a query for the stale cache item
-	rec = dnstest.NewRecorder(&test.ResponseWriter{})
-	req = new(dns.Msg)
-	req.SetQuestion(qname, dns.TypeA)
-	expectedResult = dns.RcodeNameError
-	if c.ServeDNS(ctx, rec, req); rec.Rcode != expectedResult {
-		t.Errorf("Test 2 NOERROR from Backend: expecting %v; got %v", expectedResult, rec.Rcode)
-	}
-
-	// Confirm that prefetch removes the negative cache item.
-	waitFor := 3
-	for i := 1; i <= waitFor; i++ {
-		if c.ncache.Len() != 0 {
-			if i == waitFor {
-				t.Errorf("Test 2 NOERROR from Backend: item still exists in negative cache")
-			}
-			time.Sleep(time.Second)
-			continue
-		}
-	}
-
-	// Confirm that positive cache has the item
-	if c.pcache.Len() != 1 {
-		t.Errorf("Test 2 NOERROR from Backend: item missing from positive cache")
-	}
-
-	// Backend - Give error only
-	c.Next = plugin.HandlerFunc(func(context.Context, dns.ResponseWriter, *dns.Msg) (int, error) {
-		return 255, nil // Below, a 255 means we tried querying upstream.
-	})
-
-	// Query again, expect that positive cache entry is not masked by a negative cache entry
-	rec = dnstest.NewRecorder(&test.ResponseWriter{})
-	req = new(dns.Msg)
-	req.SetQuestion(qname, dns.TypeA)
-	expectedResult = dns.RcodeSuccess
-	if ret, _ := c.ServeDNS(ctx, rec, req); ret != expectedResult {
-		t.Errorf("Test 3 NOERROR from Cache: expecting %v; got %v", expectedResult, ret)
-	}
-}
-
 func BenchmarkCacheResponse(b *testing.B) {
 	c := New()
 	c.prefetch = 1
@@ -421,20 +331,6 @@ func BackendHandler() plugin.Handler {
 
 		w.WriteMsg(m)
 		return dns.RcodeSuccess, nil
-	})
-}
-
-func nxDomainBackend(ttl int) plugin.Handler {
-	return plugin.HandlerFunc(func(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-		m := new(dns.Msg)
-		m.SetReply(r)
-		m.Response, m.RecursionAvailable = true, true
-
-		m.Ns = []dns.RR{test.SOA(fmt.Sprintf("example.org. %d IN	SOA	sns.dns.icann.org. noc.dns.icann.org. 2016082540 7200 3600 1209600 3600", ttl))}
-
-		m.MsgHdr.Rcode = dns.RcodeNameError
-		w.WriteMsg(m)
-		return dns.RcodeNameError, nil
 	})
 }
 

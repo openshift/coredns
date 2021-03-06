@@ -27,4 +27,5 @@ func TestType(t *testing.T) {
 			t.Errorf("Test %d: Expected what %v, but got %v", i, tc.expectedType, what)
 		}
 	}
+
 }

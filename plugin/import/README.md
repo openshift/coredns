@@ -68,6 +68,6 @@ This imports files found in the zones directory:
 import ../zones/*
 ~~~
 
-## See Also
+## Also See
 
 See corefile(5).

@@ -1,7 +1,5 @@
 # acl
 
-## Name
-
 *acl* - enforces access control policies on source ip and prevents unauthorized access to DNS servers.
 
 ## Description
@@ -53,7 +51,7 @@ Allow only DNS queries from 192.168.0.0/24 and 192.168.1.0/24:
 ~~~ corefile
 . {
     acl {
-        allow net 192.168.0.0/24 192.168.1.0/24
+        allow net 192.168.0.0/16 192.168.1.0/24
         block
     }
 }
@@ -68,13 +66,3 @@ example.org {
     }
 }
 ~~~
-
-## Metrics
-
-If monitoring is enabled (via the _prometheus_ plugin) then the following metrics are exported:
-
-- `coredns_acl_blocked_requests_total{server, zone}` - counter of DNS requests being blocked.
-
-- `coredns_acl_allowed_requests_total{server}` - counter of DNS requests being allowed.
-
-The `server` and `zone` labels are explained in the _metrics_ plugin documentation.

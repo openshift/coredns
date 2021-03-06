@@ -18,12 +18,11 @@ var log = clog.NewWithPlugin("sign")
 
 // Signer holds the data needed to sign a zone file.
 type Signer struct {
-	keys        []Pair
-	origin      string
-	dbfile      string
-	directory   string
-	jitterIncep time.Duration
-	jitterExpir time.Duration
+	keys      []Pair
+	origin    string
+	dbfile    string
+	directory string
+	jitter    time.Duration
 
 	signedfile string
 	stop       chan struct{}
@@ -43,7 +42,7 @@ func (s *Signer) Sign(now time.Time) (*file.Zone, error) {
 
 	mttl := z.Apex.SOA.Minttl
 	ttl := z.Apex.SOA.Header().Ttl
-	inception, expiration := lifetime(now, s.jitterIncep, s.jitterExpir)
+	inception, expiration := lifetime(now, s.jitter)
 	z.Apex.SOA.Serial = uint32(now.Unix())
 
 	for _, pair := range s.keys {
@@ -144,8 +143,8 @@ func resign(rd io.Reader, now time.Time) (why error) {
 			}
 			incep, _ := time.Parse("20060102150405", dns.TimeToString(x.Inception))
 			// If too long ago, resign.
-			if now.Sub(incep) >= 0 && now.Sub(incep) > durationResignDays {
-				return fmt.Errorf("inception %q was more than: %s ago from %s: %s", incep.Format(timeFmt), durationResignDays, now.Format(timeFmt), now.Sub(incep))
+			if now.Sub(incep) >= 0 && now.Sub(incep) > DurationResignDays {
+				return fmt.Errorf("inception %q was more than: %s ago from %s: %s", incep.Format(timeFmt), DurationResignDays, now.Format(timeFmt), now.Sub(incep))
 			}
 			// Inception hasn't even start yet.
 			if now.Sub(incep) < 0 {
@@ -153,8 +152,8 @@ func resign(rd io.Reader, now time.Time) (why error) {
 			}
 
 			expire, _ := time.Parse("20060102150405", dns.TimeToString(x.Expiration))
-			if expire.Sub(now) < durationExpireDays {
-				return fmt.Errorf("expiration %q is less than: %s away from %s: %s", expire.Format(timeFmt), durationExpireDays, now.Format(timeFmt), expire.Sub(now))
+			if expire.Sub(now) < DurationExpireDays {
+				return fmt.Errorf("expiration %q is less than: %s away from %s: %s", expire.Format(timeFmt), DurationExpireDays, now.Format(timeFmt), expire.Sub(now))
 			}
 		}
 		i++
@@ -174,7 +173,7 @@ func signAndLog(s *Signer, why error) {
 	z, err := s.Sign(now)
 	log.Infof("Signing %q because %s", s.origin, why)
 	if err != nil {
-		log.Warningf("Error signing %q with key tags %q in %s: %s, next: %s", s.origin, keyTag(s.keys), time.Since(now), err, now.Add(durationRefreshHours).Format(timeFmt))
+		log.Warningf("Error signing %q with key tags %q in %s: %s, next: %s", s.origin, keyTag(s.keys), time.Since(now), err, now.Add(DurationRefreshHours).Format(timeFmt))
 		return
 	}
 
@@ -182,7 +181,7 @@ func signAndLog(s *Signer, why error) {
 		log.Warningf("Error signing %q: failed to move zone file into place: %s", s.origin, err)
 		return
 	}
-	log.Infof("Successfully signed zone %q in %q with key tags %q and %d SOA serial, elapsed %f, next: %s", s.origin, filepath.Join(s.directory, s.signedfile), keyTag(s.keys), z.Apex.SOA.Serial, time.Since(now).Seconds(), now.Add(durationRefreshHours).Format(timeFmt))
+	log.Infof("Successfully signed zone %q in %q with key tags %q and %d SOA serial, elapsed %f, next: %s", s.origin, filepath.Join(s.directory, s.signedfile), keyTag(s.keys), z.Apex.SOA.Serial, time.Since(now).Seconds(), now.Add(DurationRefreshHours).Format(timeFmt))
 }
 
 // refresh checks every val if some zones need to be resigned.
@@ -203,8 +202,8 @@ func (s *Signer) refresh(val time.Duration) {
 	}
 }
 
-func lifetime(now time.Time, jitterInception, jitterExpiration time.Duration) (uint32, uint32) {
-	incep := uint32(now.Add(durationSignatureInceptionHours).Add(jitterInception).Unix())
-	expir := uint32(now.Add(durationSignatureExpireDays).Add(jitterExpiration).Unix())
+func lifetime(now time.Time, jitter time.Duration) (uint32, uint32) {
+	incep := uint32(now.Add(DurationSignatureInceptionHours).Add(jitter).Unix())
+	expir := uint32(now.Add(DurationSignatureExpireDays).Unix())
 	return incep, expir
 }

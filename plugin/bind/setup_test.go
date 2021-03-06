@@ -3,8 +3,9 @@ package bind
 import (
 	"testing"
 
-	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
+
+	"github.com/caddyserver/caddy"
 )
 
 func TestSetup(t *testing.T) {

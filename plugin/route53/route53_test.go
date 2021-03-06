@@ -37,7 +37,7 @@ func (fakeRoute53) ListResourceRecordSetsPagesWithContext(_ aws.Context, in *rou
 	}{
 		{"A", "example.org.", "1.2.3.4", "1234567890"},
 		{"A", "www.example.org", "1.2.3.4", "1234567890"},
-		{"CNAME", `\052.www.example.org`, "www.example.org", "1234567890"},
+		{"CNAME", `\\052.www.example.org`, "www.example.org", "1234567890"},
 		{"AAAA", "example.org.", "2001:db8:85a3::8a2e:370:7334", "1234567890"},
 		{"CNAME", "sample.example.org.", "example.org", "1234567890"},
 		{"PTR", "example.org.", "ptr.example.org.", "1234567890"},
@@ -81,7 +81,7 @@ func TestRoute53(t *testing.T) {
 
 	r, err := New(ctx, fakeRoute53{}, map[string][]string{"bad.": {"0987654321"}}, time.Minute)
 	if err != nil {
-		t.Fatalf("Failed to create route53: %v", err)
+		t.Fatalf("Failed to create Route53: %v", err)
 	}
 	if err = r.Run(ctx); err == nil {
 		t.Fatalf("Expected errors for zone bad.")
@@ -89,7 +89,7 @@ func TestRoute53(t *testing.T) {
 
 	r, err = New(ctx, fakeRoute53{}, map[string][]string{"org.": {"1357986420", "1234567890"}, "gov.": {"Z098765432", "1234567890"}}, 90*time.Second)
 	if err != nil {
-		t.Fatalf("Failed to create route53: %v", err)
+		t.Fatalf("Failed to create Route53: %v", err)
 	}
 	r.Fall = fall.Zero
 	r.Fall.SetZonesFromArgs([]string{"gov."})
@@ -117,7 +117,7 @@ func TestRoute53(t *testing.T) {
 	})
 	err = r.Run(ctx)
 	if err != nil {
-		t.Fatalf("Failed to initialize route53: %v", err)
+		t.Fatalf("Failed to initialize Route53: %v", err)
 	}
 
 	tests := []struct {
@@ -167,24 +167,30 @@ func TestRoute53(t *testing.T) {
 		// 5. Explicit SOA query for example.org.
 		{
 			qname: "example.org",
+			qtype: dns.TypeSOA,
+			wantAnswer: []string{"org.	300	IN	SOA	ns-15.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"},
+		},
+		// 6. Explicit SOA query for example.org.
+		{
+			qname: "example.org",
 			qtype: dns.TypeNS,
 			wantNS: []string{"org.	300	IN	SOA	ns-1536.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"},
 		},
-		// 6. AAAA query for split-example.org must return NODATA.
+		// 7. AAAA query for split-example.org must return NODATA.
 		{
 			qname:       "split-example.gov",
 			qtype:       dns.TypeAAAA,
 			wantRetCode: dns.RcodeSuccess,
 			wantNS: []string{"org.	300	IN	SOA	ns-1536.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"},
 		},
-		// 7. Zone not configured.
+		// 8. Zone not configured.
 		{
 			qname:        "badexample.com",
 			qtype:        dns.TypeA,
 			wantRetCode:  dns.RcodeServerFailure,
 			wantMsgRCode: dns.RcodeServerFailure,
 		},
-		// 8. No record found. Return SOA record.
+		// 9. No record found. Return SOA record.
 		{
 			qname:        "bad.org",
 			qtype:        dns.TypeA,
@@ -192,25 +198,25 @@ func TestRoute53(t *testing.T) {
 			wantMsgRCode: dns.RcodeNameError,
 			wantNS: []string{"org.	300	IN	SOA	ns-1536.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"},
 		},
-		// 9. No record found. Fallthrough.
+		// 10. No record found. Fallthrough.
 		{
 			qname: "example.gov",
 			qtype: dns.TypeA,
 			wantAnswer: []string{"example.gov.	300	IN	A	2.4.6.8"},
 		},
-		// 10. other-zone.example.org is stored in a different hosted zone. success
+		// 11. other-zone.example.org is stored in a different hosted zone. success
 		{
 			qname: "other-example.org",
 			qtype: dns.TypeA,
 			wantAnswer: []string{"other-example.org.	300	IN	A	3.5.7.9"},
 		},
-		// 11. split-example.org only has A record. Expect NODATA.
+		// 12. split-example.org only has A record. Expect NODATA.
 		{
 			qname: "split-example.org",
 			qtype: dns.TypeAAAA,
 			wantNS: []string{"org.	300	IN	SOA	ns-15.awsdns-00.co.uk. awsdns-hostmaster.amazon.com. 1 7200 900 1209600 86400"},
 		},
-		// 12. *.www.example.org is a wildcard CNAME to www.example.org.
+		// 13. *.www.example.org is a wildcard CNAME to www.example.org.
 		{
 			qname: "a.www.example.org",
 			qtype: dns.TypeA,
@@ -275,17 +281,17 @@ func TestMaybeUnescape(t *testing.T) {
 		// 1. non-escaped sequence.
 		{escaped: "example.com.", want: "example.com."},
 		// 2. escaped `*` as first label - OK.
-		{escaped: `\052.example.com`, want: "*.example.com"},
+		{escaped: `\\052.example.com`, want: "*.example.com"},
 		// 3. Escaped dot, 'a' and a hyphen. No idea why but we'll allow it.
-		{escaped: `weird\055ex\141mple\056com\056\056`, want: "weird-example.com.."},
+		{escaped: `weird\\055ex\\141mple\\056com\\056\\056`, want: "weird-example.com.."},
 		// 4. escaped `*` in the middle - NOT OK.
-		{escaped: `e\052ample.com`, wantErr: errors.New("`*' only supported as wildcard (leftmost label)")},
+		{escaped: `e\\052ample.com`, wantErr: errors.New("`*' only supported as wildcard (leftmost label)")},
 		// 5. Invalid character.
-		{escaped: `\000.example.com`, wantErr: errors.New(`invalid character: \000`)},
+		{escaped: `\\000.example.com`, wantErr: errors.New(`invalid character: \\000`)},
 		// 6. Invalid escape sequence in the middle.
-		{escaped: `example\0com`, wantErr: errors.New(`invalid escape sequence: '\0co'`)},
+		{escaped: `example\\0com`, wantErr: errors.New(`invalid escape sequence: '\\0co'`)},
 		// 7. Invalid escape sequence at the end.
-		{escaped: `example.com\0`, wantErr: errors.New(`invalid escape sequence: '\0'`)},
+		{escaped: `example.com\\0`, wantErr: errors.New(`invalid escape sequence: '\\0'`)},
 	} {
 		got, gotErr := maybeUnescape(tc.escaped)
 		if tc.wantErr != gotErr && !reflect.DeepEqual(tc.wantErr, gotErr) {

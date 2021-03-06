@@ -1,7 +1,6 @@
 package external
 
 import (
-	"context"
 	"math"
 
 	"github.com/coredns/coredns/plugin/etcd/msg"
@@ -10,7 +9,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func (e *External) a(ctx context.Context, services []msg.Service, state request.Request) (records []dns.RR) {
+func (e *External) a(services []msg.Service, state request.Request) (records []dns.RR) {
 	dup := make(map[string]struct{})
 
 	for _, s := range services {
@@ -19,13 +18,7 @@ func (e *External) a(ctx context.Context, services []msg.Service, state request.
 
 		switch what {
 		case dns.TypeCNAME:
-			rr := s.NewCNAME(state.QName(), s.Host)
-			records = append(records, rr)
-			if resp, err := e.upstream.Lookup(ctx, state, dns.Fqdn(s.Host), dns.TypeA); err == nil {
-				for _, rr := range resp.Answer {
-					records = append(records, rr)
-				}
-			}
+			// can't happen
 
 		case dns.TypeA:
 			if _, ok := dup[s.Host]; !ok {
@@ -42,7 +35,7 @@ func (e *External) a(ctx context.Context, services []msg.Service, state request.
 	return records
 }
 
-func (e *External) aaaa(ctx context.Context, services []msg.Service, state request.Request) (records []dns.RR) {
+func (e *External) aaaa(services []msg.Service, state request.Request) (records []dns.RR) {
 	dup := make(map[string]struct{})
 
 	for _, s := range services {
@@ -51,13 +44,7 @@ func (e *External) aaaa(ctx context.Context, services []msg.Service, state reque
 
 		switch what {
 		case dns.TypeCNAME:
-			rr := s.NewCNAME(state.QName(), s.Host)
-			records = append(records, rr)
-			if resp, err := e.upstream.Lookup(ctx, state, dns.Fqdn(s.Host), dns.TypeAAAA); err == nil {
-				for _, rr := range resp.Answer {
-					records = append(records, rr)
-				}
-			}
+			// can't happen
 
 		case dns.TypeA:
 			// nada
@@ -103,10 +90,6 @@ func (e *External) srv(services []msg.Service, state request.Request) (records, 
 			w1 *= float64(s.Weight)
 		}
 		weight := uint16(math.Floor(w1))
-		// weight should be at least 1
-		if weight == 0 {
-			weight = 1
-		}
 
 		what, ip := s.HostType()
 
