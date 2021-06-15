@@ -96,19 +96,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 	}
 	k8s.opts = opts
 
-	zones := c.RemainingArgs()
-
-	if len(zones) != 0 {
-		k8s.Zones = zones
-		for i := 0; i < len(k8s.Zones); i++ {
-			k8s.Zones[i] = plugin.Host(k8s.Zones[i]).Normalize()
-		}
-	} else {
-		k8s.Zones = make([]string, len(c.ServerBlockKeys))
-		for i := 0; i < len(c.ServerBlockKeys); i++ {
-			k8s.Zones[i] = plugin.Host(c.ServerBlockKeys[i]).Normalize()
-		}
-	}
+	k8s.Zones = plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), c.ServerBlockKeys)
 
 	k8s.primaryZoneIndex = -1
 	for i, z := range k8s.Zones {
@@ -231,15 +219,18 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			}
 		case "kubeconfig":
 			args := c.RemainingArgs()
-			if len(args) == 2 {
-				config := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-					&clientcmd.ClientConfigLoadingRules{ExplicitPath: args[0]},
-					&clientcmd.ConfigOverrides{CurrentContext: args[1]},
-				)
-				k8s.ClientConfig = config
-				continue
+			if len(args) != 1 && len(args) != 2 {
+				return nil, c.ArgErr()
 			}
-			return nil, c.ArgErr()
+			overrides := &clientcmd.ConfigOverrides{}
+			if len(args) == 2 {
+				overrides.CurrentContext = args[1]
+			}
+			config := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+				&clientcmd.ClientConfigLoadingRules{ExplicitPath: args[0]},
+				overrides,
+			)
+			k8s.ClientConfig = config
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}

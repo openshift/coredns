@@ -12,7 +12,7 @@ import (
 
 // overloaded queries the health end point and updates a metrics showing how long it took.
 func (h *health) overloaded() {
-	timeout := time.Duration(5 * time.Second)
+	timeout := time.Duration(3 * time.Second)
 	client := http.Client{
 		Timeout: timeout,
 	}
@@ -26,11 +26,17 @@ func (h *health) overloaded() {
 			start := time.Now()
 			resp, err := client.Get(url)
 			if err != nil {
-				HealthDuration.Observe(timeout.Seconds())
+				HealthDuration.Observe(time.Since(start).Seconds())
+				HealthFailures.Inc()
+				log.Warningf("Local health request to %q failed: %s", url, err)
 				continue
 			}
 			resp.Body.Close()
-			HealthDuration.Observe(time.Since(start).Seconds())
+			elapsed := time.Since(start)
+			HealthDuration.Observe(elapsed.Seconds())
+			if elapsed > time.Second { // 1s is pretty random, but a *local* scrape taking that long isn't good
+				log.Warningf("Local health request to %q took more than 1s: %s", url, elapsed)
+			}
 
 		case <-h.stop:
 			return
@@ -44,7 +50,14 @@ var (
 		Namespace: plugin.Namespace,
 		Subsystem: "health",
 		Name:      "request_duration_seconds",
-		Buckets:   plugin.TimeBuckets,
+		Buckets:   plugin.SlimTimeBuckets,
 		Help:      "Histogram of the time (in seconds) each request took.",
+	})
+	// HealthFailures is the metric used to count how many times the thealth request failed
+	HealthFailures = promauto.NewCounter(prometheus.CounterOpts{
+		Namespace: plugin.Namespace,
+		Subsystem: "health",
+		Name:      "request_failures_total",
+		Help:      "The number of times the health check failed.",
 	})
 )
