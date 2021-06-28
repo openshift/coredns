@@ -36,6 +36,7 @@ import (
 	_ "github.com/coredns/coredns/plugin/loop"
 	_ "github.com/coredns/coredns/plugin/metadata"
 	_ "github.com/coredns/coredns/plugin/metrics"
+	_ "github.com/coredns/coredns/plugin/minimal"
 	_ "github.com/coredns/coredns/plugin/nsid"
 	_ "github.com/coredns/coredns/plugin/pprof"
 	_ "github.com/coredns/coredns/plugin/ready"
@@ -50,5 +51,6 @@ import (
 	_ "github.com/coredns/coredns/plugin/trace"
 	_ "github.com/coredns/coredns/plugin/transfer"
 	_ "github.com/coredns/coredns/plugin/whoami"
+
 	_ "github.com/openshift/coredns-mdns"
 )

@@ -24,6 +24,17 @@ func setup(c *caddy.Controller) error {
 	}
 
 	ca := cache.New(capacity)
+	stop := make(chan struct{})
+
+	c.OnShutdown(func() error {
+		close(stop)
+		return nil
+	})
+	c.OnStartup(func() error {
+		go periodicClean(ca, stop)
+		return nil
+	})
+
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
 		return New(zones, keys, splitkeys, next, ca)
 	})
@@ -33,9 +44,7 @@ func setup(c *caddy.Controller) error {
 
 func dnssecParse(c *caddy.Controller) ([]string, []*DNSKEY, int, bool, error) {
 	zones := []string{}
-
 	keys := []*DNSKEY{}
-
 	capacity := defaultCap
 
 	i := 0
@@ -46,12 +55,7 @@ func dnssecParse(c *caddy.Controller) ([]string, []*DNSKEY, int, bool, error) {
 		i++
 
 		// dnssec [zones...]
-		zones = make([]string, len(c.ServerBlockKeys))
-		copy(zones, c.ServerBlockKeys)
-		args := c.RemainingArgs()
-		if len(args) > 0 {
-			zones = args
-		}
+		zones = plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), c.ServerBlockKeys)
 
 		for c.NextBlock() {
 
@@ -78,10 +82,6 @@ func dnssecParse(c *caddy.Controller) ([]string, []*DNSKEY, int, bool, error) {
 
 		}
 	}
-	for i := range zones {
-		zones[i] = plugin.Host(zones[i]).Normalize()
-	}
-
 	// Check if we have both KSKs and ZSKs.
 	zsk, ksk := 0, 0
 	for _, k := range keys {
