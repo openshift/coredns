@@ -166,7 +166,7 @@ github.com/konsorten/go-windows-terminal-sequences
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 ## explicit
 github.com/matttproud/golang_protobuf_extensions/pbutil
-# github.com/miekg/dns v1.1.42
+# github.com/miekg/dns v1.1.43
 ## explicit
 github.com/miekg/dns
 # github.com/mitchellh/go-homedir v1.1.0
