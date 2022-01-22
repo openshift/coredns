@@ -568,6 +568,17 @@ func (APIConnServeTest) PodIndex(ip string) []*object.Pod {
 }
 
 var svcIndex = map[string][]*object.Service{
+	"kubedns.kube-system": {
+		{
+			Name:       "kubedns",
+			Namespace:  "kube-system",
+			Type:       api.ServiceTypeClusterIP,
+			ClusterIPs: []string{"10.0.0.10"},
+			Ports: []api.ServicePort{
+				{Name: "dns", Protocol: "udp", Port: 53},
+			},
+		},
+	},
 	"svc1.testns": {
 		{
 			Name:       "svc1",
@@ -673,6 +684,21 @@ func (APIConnServeTest) ServiceList() []*object.Service {
 }
 
 var epsIndex = map[string][]*object.Endpoints{
+	"kubedns.kube-system": {{
+		Subsets: []object.EndpointSubset{
+			{
+				Addresses: []object.EndpointAddress{
+					{IP: "172.0.0.100"},
+				},
+				Ports: []object.EndpointPort{
+					{Port: 53, Protocol: "udp", Name: "dns"},
+				},
+			},
+		},
+		Name:      "kubedns",
+		Namespace: "kube-system",
+		Index:     object.EndpointsKey("kubedns", "kube-system"),
+	}},
 	"svc1.testns": {{
 		Subsets: []object.EndpointSubset{
 			{
@@ -756,16 +782,14 @@ func (APIConnServeTest) GetNodeByName(ctx context.Context, name string) (*api.No
 	}, nil
 }
 
-func (APIConnServeTest) GetNamespaceByName(name string) (*api.Namespace, error) {
+func (APIConnServeTest) GetNamespaceByName(name string) (*object.Namespace, error) {
 	if name == "pod-nons" { // handler_pod_verified_test.go uses this for non-existent namespace.
-		return &api.Namespace{}, nil
+		return nil, fmt.Errorf("namespace not found")
 	}
 	if name == "nsnoexist" {
 		return nil, fmt.Errorf("namespace not found")
 	}
-	return &api.Namespace{
-		ObjectMeta: meta.ObjectMeta{
-			Name: name,
-		},
+	return &object.Namespace{
+		Name: name,
 	}, nil
 }

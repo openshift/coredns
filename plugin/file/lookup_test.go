@@ -95,6 +95,43 @@ var dnsTestCases = []test.Case{
 		},
 		Ns: miekAuth,
 	},
+	{
+		Qname: "asterisk.x.miek.nl.", Qtype: dns.TypeCNAME,
+		Answer: []dns.RR{
+			test.CNAME("asterisk.x.miek.nl. 1800    IN      CNAME   www.miek.nl."),
+		},
+		Ns: miekAuth,
+	},
+	{
+		Qname: "a.b.x.miek.nl.", Qtype: dns.TypeCNAME,
+		Rcode: dns.RcodeNameError,
+		Ns: []dns.RR{
+			test.SOA("miek.nl.	1800	IN	SOA	linode.atoom.net. miek.miek.nl. 1282630057 14400 3600 604800 14400"),
+		},
+	},
+	{
+		Qname: "asterisk.y.miek.nl.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			test.A("asterisk.y.miek.nl.     1800    IN      A       139.162.196.78"),
+		},
+		Ns: miekAuth,
+	},
+	{
+		Qname: "foo.dname.miek.nl.", Qtype: dns.TypeCNAME,
+		Answer: []dns.RR{
+			test.DNAME("dname.miek.nl.     1800    IN      DNAME       x.miek.nl."),
+			test.CNAME("foo.dname.miek.nl.     1800    IN      CNAME       foo.x.miek.nl."),
+		},
+		Ns: miekAuth,
+	},
+	{
+		Qname: "ext-cname.miek.nl.", Qtype: dns.TypeA,
+		Answer: []dns.RR{
+			test.CNAME("ext-cname.miek.nl.	1800	IN	CNAME	example.com."),
+		},
+		Rcode: dns.RcodeServerFailure,
+		Ns:    miekAuth,
+	},
 }
 
 const (
@@ -191,6 +228,12 @@ a               IN      A       139.162.196.78
                 IN      AAAA    2a01:7e00::f03c:91ff:fef1:6735
 www             IN      CNAME   a
 archive         IN      CNAME   a
+*.x             IN      CNAME   www
+b.x             IN      CNAME   a
+*.y             IN      A       139.162.196.78
+dname           IN      DNAME   x
 
 srv		IN	SRV     10 10 8080 a.miek.nl.
-mx		IN	MX      10 a.miek.nl.`
+mx		IN	MX      10 a.miek.nl.
+
+ext-cname   IN   CNAME  example.com.`

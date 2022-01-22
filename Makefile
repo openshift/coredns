@@ -6,7 +6,7 @@ CHECKS:=check
 BUILDOPTS:=-v
 GOPATH?=$(HOME)/go
 MAKEPWD:=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
-CGO_ENABLED:=0
+CGO_ENABLED?=0
 
 .PHONY: all
 all: coredns
@@ -20,10 +20,12 @@ check: core/plugin/zplugin.go core/dnsserver/zdirectives.go
 
 core/plugin/zplugin.go core/dnsserver/zdirectives.go: plugin.cfg
 	go generate coredns.go
+	go get
 
 .PHONY: gen
 gen:
 	go generate coredns.go
+	go get
 
 .PHONY: pb
 pb:
@@ -33,19 +35,3 @@ pb:
 clean:
 	go clean
 	rm -f coredns
-
-.PHONY: dep-ensure
-dep-ensure:
-	dep version || go get -u github.com/golang/dep/cmd/dep
-	dep ensure -v
-	dep prune -v
-	find vendor -name '*_test.go' -delete
-
-.PHONY: test
-test: check
-	( cd request ; go test -v -race ./... )
-	( cd core ; go test -v -race  ./... )
-	( cd coremain ; go test -v -race ./... )
-	( cd test ; go test -v -race ./... )
-	( cd plugin ; go test -v -race ./... )
-

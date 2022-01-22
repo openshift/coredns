@@ -12,7 +12,6 @@ import (
 
 	"github.com/miekg/dns"
 	api "k8s.io/api/core/v1"
-	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestExternal(t *testing.T) {
@@ -155,6 +154,12 @@ var tests = []test.Case{
 		},
 	},
 	{
+		Qname: "_http._tcp.svc12.testns.example.com.", Qtype: dns.TypeSRV, Rcode: dns.RcodeSuccess,
+		Answer: []dns.RR{
+			test.SRV("_http._tcp.svc12.testns.example.com.	5	IN	SRV	0 100 80 dummy.hostname."),
+		},
+	},
+	{
 		Qname: "svc12.testns.example.com.", Qtype: dns.TypeA, Rcode: dns.RcodeSuccess,
 		Answer: []dns.RR{
 			test.CNAME("svc12.testns.example.com.	5	IN	CNAME	dummy.hostname"),
@@ -176,11 +181,9 @@ func (external) GetNodeByName(ctx context.Context, name string) (*api.Node, erro
 func (external) SvcIndex(s string) []*object.Service                               { return svcIndexExternal[s] }
 func (external) PodIndex(string) []*object.Pod                                     { return nil }
 
-func (external) GetNamespaceByName(name string) (*api.Namespace, error) {
-	return &api.Namespace{
-		ObjectMeta: meta.ObjectMeta{
-			Name: name,
-		},
+func (external) GetNamespaceByName(name string) (*object.Namespace, error) {
+	return &object.Namespace{
+		Name: name,
 	}, nil
 }
 

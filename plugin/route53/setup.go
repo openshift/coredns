@@ -15,8 +15,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
+	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/route53"
 	"github.com/aws/aws-sdk-go/service/route53/route53iface"
@@ -27,8 +26,8 @@ var log = clog.NewWithPlugin("route53")
 func init() { plugin.Register("route53", setup) }
 
 // exposed for testing
-var f = func(credential *credentials.Credentials) route53iface.Route53API {
-	return route53.New(session.Must(session.NewSession(&aws.Config{Credentials: credential})))
+var f = func(credential *credentials.Credentials, endpoint *string) route53iface.Route53API {
+	return route53.New(session.Must(session.NewSession(&aws.Config{Credentials: credential, Endpoint: endpoint})))
 }
 
 func setup(c *caddy.Controller) error {
@@ -45,6 +44,7 @@ func setup(c *caddy.Controller) error {
 		sharedProvider := &credentials.SharedCredentialsProvider{}
 		var providers []credentials.Provider
 		var fall fall.F
+		var endpoint string
 
 		refresh := time.Duration(1) * time.Minute // default update frequency to 1 minute
 
@@ -80,6 +80,12 @@ func setup(c *caddy.Controller) error {
 						SecretAccessKey: v[1],
 					},
 				})
+			case "aws_endpoint":
+				if c.NextArg() {
+					endpoint = c.Val()
+				} else {
+					return plugin.Error("route53", c.ArgErr())
+				}
 			case "upstream":
 				c.RemainingArgs() // eats args
 			case "credentials":
@@ -120,10 +126,8 @@ func setup(c *caddy.Controller) error {
 			return plugin.Error("route53", err)
 		}
 
-		providers = append(providers, &credentials.EnvProvider{}, sharedProvider, &ec2rolecreds.EC2RoleProvider{
-			Client: ec2metadata.New(session),
-		})
-		client := f(credentials.NewChainCredentials(providers))
+		providers = append(providers, &credentials.EnvProvider{}, sharedProvider, defaults.RemoteCredProvider(*session.Config, session.Handlers))
+		client := f(credentials.NewChainCredentials(providers), &endpoint)
 		ctx, cancel := context.WithCancel(context.Background())
 		h, err := New(ctx, client, keys, refresh)
 		if err != nil {

@@ -2,9 +2,11 @@ package trace
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/coredns/caddy"
+	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
 	"github.com/coredns/coredns/plugin/test"
@@ -42,18 +44,35 @@ func TestTrace(t *testing.T) {
 	cases := []struct {
 		name     string
 		rcode    int
+		status   int
 		question *dns.Msg
-		server   string
+		err      error
 	}{
 		{
 			name:     "NXDOMAIN",
 			rcode:    dns.RcodeNameError,
+			status:   dns.RcodeSuccess,
 			question: new(dns.Msg).SetQuestion("example.org.", dns.TypeA),
 		},
 		{
 			name:     "NOERROR",
 			rcode:    dns.RcodeSuccess,
+			status:   dns.RcodeSuccess,
 			question: new(dns.Msg).SetQuestion("example.net.", dns.TypeCNAME),
+		},
+		{
+			name:     "SERVFAIL",
+			rcode:    dns.RcodeServerFailure,
+			status:   dns.RcodeSuccess,
+			question: new(dns.Msg).SetQuestion("example.net.", dns.TypeA),
+			err:      errors.New("test error"),
+		},
+		{
+			name:     "No response written",
+			rcode:    dns.RcodeServerFailure,
+			status:   dns.RcodeServerFailure,
+			question: new(dns.Msg).SetQuestion("example.net.", dns.TypeA),
+			err:      errors.New("test error"),
 		},
 	}
 	defaultTagSet := tagByProvider["default"]
@@ -63,17 +82,19 @@ func TestTrace(t *testing.T) {
 			m := mocktracer.New()
 			tr := &trace{
 				Next: test.HandlerFunc(func(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
-					m := new(dns.Msg)
-					m.SetRcode(r, tc.rcode)
-					w.WriteMsg(m)
-					return tc.rcode, nil
+					if plugin.ClientWrite(tc.status) {
+						m := new(dns.Msg)
+						m.SetRcode(r, tc.rcode)
+						w.WriteMsg(m)
+					}
+					return tc.status, tc.err
 				}),
 				every:  1,
 				tracer: m,
 				tagSet: defaultTagSet,
 			}
 			ctx := context.TODO()
-			if _, err := tr.ServeDNS(ctx, w, tc.question); err != nil {
+			if _, err := tr.ServeDNS(ctx, w, tc.question); err != nil && tc.err == nil {
 				t.Fatalf("Error during tr.ServeDNS(ctx, w, %v): %v", tc.question, err)
 			}
 
@@ -103,6 +124,9 @@ func TestTrace(t *testing.T) {
 			}
 			if rootSpan.Tag(defaultTagSet.Rcode) != rcode.ToString(tc.rcode) {
 				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", defaultTagSet.Rcode, rcode.ToString(tc.rcode), rootSpan.Tag(defaultTagSet.Rcode))
+			}
+			if tc.err != nil && rootSpan.Tag("error") != true {
+				t.Errorf("Unexpected span tag: rootSpan.Tag(%v): want %v, got %v", "error", true, rootSpan.Tag("error"))
 			}
 		})
 	}

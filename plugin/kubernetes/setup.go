@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
@@ -21,7 +23,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"      // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
 	_ "k8s.io/client-go/plugin/pkg/client/auth/openstack" // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const pluginName = "kubernetes"
@@ -31,6 +33,7 @@ var log = clog.NewWithPlugin(pluginName)
 func init() { plugin.Register(pluginName, setup) }
 
 func setup(c *caddy.Controller) error {
+	// Do not call klog.InitFlags(nil) here.  It will cause reload to panic.
 	klog.SetOutput(os.Stdout)
 
 	k, err := kubernetesParse(c)
@@ -57,6 +60,25 @@ func setup(c *caddy.Controller) error {
 	// get locally bound addresses
 	c.OnStartup(func() error {
 		k.localIPs = boundIPs(c)
+		return nil
+	})
+
+	wildWarner := time.NewTicker(10 * time.Second)
+	c.OnStartup(func() error {
+		go func() {
+			for {
+				select {
+				case <-wildWarner.C:
+					if wc := atomic.SwapUint64(&wildCount, 0); wc > 0 {
+						log.Warningf("%d deprecated wildcard queries received. Wildcard queries will no longer be supported in the next minor release.", wc)
+					}
+				}
+			}
+		}()
+		return nil
+	})
+	c.OnShutdown(func() error {
+		wildWarner.Stop()
 		return nil
 	})
 

@@ -39,7 +39,7 @@ type dnsController interface {
 	EpIndexReverse(string) []*object.Endpoints
 
 	GetNodeByName(context.Context, string) (*api.Node, error)
-	GetNamespaceByName(string) (*api.Namespace, error)
+	GetNamespaceByName(string) (*object.Namespace, error)
 
 	Run()
 	HasSynced() bool
@@ -100,7 +100,7 @@ type dnsControlOpts struct {
 	endpointNameMode bool
 }
 
-// newDNSController creates a controller for CoreDNS.
+// newdnsController creates a controller for CoreDNS.
 func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, opts dnsControlOpts) *dnsControl {
 	dns := dnsControl{
 		client:            kubeClient,
@@ -150,14 +150,16 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, opts
 		dns.epLock.Unlock()
 	}
 
-	dns.nsLister, dns.nsController = cache.NewInformer(
+	dns.nsLister, dns.nsController = object.NewIndexerInformer(
 		&cache.ListWatch{
 			ListFunc:  namespaceListFunc(ctx, dns.client, dns.namespaceSelector),
 			WatchFunc: namespaceWatchFunc(ctx, dns.client, dns.namespaceSelector),
 		},
 		&api.Namespace{},
-		defaultResyncPeriod,
-		cache.ResourceEventHandlerFuncs{})
+		cache.ResourceEventHandlerFuncs{},
+		cache.Indexers{},
+		object.DefaultProcessor(object.ToNamespace, nil),
+	)
 
 	return &dns
 }
@@ -539,22 +541,23 @@ func (dns *dnsControl) GetNodeByName(ctx context.Context, name string) (*api.Nod
 }
 
 // GetNamespaceByName returns the namespace by name. If nothing is found an error is returned.
-func (dns *dnsControl) GetNamespaceByName(name string) (*api.Namespace, error) {
-	os := dns.nsLister.List()
-	for _, o := range os {
-		ns, ok := o.(*api.Namespace)
-		if !ok {
-			continue
-		}
-		if name == ns.ObjectMeta.Name {
-			return ns, nil
-		}
+func (dns *dnsControl) GetNamespaceByName(name string) (*object.Namespace, error) {
+	o, exists, err := dns.nsLister.GetByKey(name)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("namespace not found")
+	if !exists {
+		return nil, fmt.Errorf("namespace not found")
+	}
+	ns, ok := o.(*object.Namespace)
+	if !ok {
+		return nil, fmt.Errorf("found key but not namespace")
+	}
+	return ns, nil
 }
 
-func (dns *dnsControl) Add(obj interface{})               { dns.updateModifed() }
-func (dns *dnsControl) Delete(obj interface{})            { dns.updateModifed() }
+func (dns *dnsControl) Add(obj interface{})               { dns.updateModified() }
+func (dns *dnsControl) Delete(obj interface{})            { dns.updateModified() }
 func (dns *dnsControl) Update(oldObj, newObj interface{}) { dns.detectChanges(oldObj, newObj) }
 
 // detectChanges detects changes in objects, and updates the modified timestamp
@@ -569,12 +572,12 @@ func (dns *dnsControl) detectChanges(oldObj, newObj interface{}) {
 	}
 	switch ob := obj.(type) {
 	case *object.Service:
-		dns.updateModifed()
+		dns.updateModified()
 	case *object.Pod:
-		dns.updateModifed()
+		dns.updateModified()
 	case *object.Endpoints:
 		if !endpointsEquivalent(oldObj.(*object.Endpoints), newObj.(*object.Endpoints)) {
-			dns.updateModifed()
+			dns.updateModified()
 		}
 	default:
 		log.Warningf("Updates for %T not supported.", ob)
@@ -649,7 +652,7 @@ func (dns *dnsControl) Modified() int64 {
 }
 
 // updateModified set dns.modified to the current time.
-func (dns *dnsControl) updateModifed() {
+func (dns *dnsControl) updateModified() {
 	unix := time.Now().Unix()
 	atomic.StoreInt64(&dns.modified, unix)
 }
