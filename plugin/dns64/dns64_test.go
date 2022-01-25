@@ -21,6 +21,58 @@ func To6(prefix, address string) (net.IP, error) {
 	return to6(pref, addr)
 }
 
+func TestRequestShouldIntercept(t *testing.T) {
+	tests := []struct {
+		name      string
+		allowIpv4 bool
+		remoteIP  string
+		msg       *dns.Msg
+		want      bool
+	}{
+		{
+			name:      "should intercept request from IPv6 network - AAAA - IN",
+			allowIpv4: true,
+			remoteIP:  "::1",
+			msg:       new(dns.Msg).SetQuestion("example.com", dns.TypeAAAA),
+			want:      true,
+		},
+		{
+			name:      "should intercept request from IPv4 network - AAAA - IN",
+			allowIpv4: true,
+			remoteIP:  "127.0.0.1",
+			msg:       new(dns.Msg).SetQuestion("example.com", dns.TypeAAAA),
+			want:      true,
+		},
+		{
+			name:      "should not intercept request from IPv4 network - AAAA - IN",
+			allowIpv4: false,
+			remoteIP:  "127.0.0.1",
+			msg:       new(dns.Msg).SetQuestion("example.com", dns.TypeAAAA),
+			want:      false,
+		},
+		{
+			name:      "should not intercept request from IPv6 network - A - IN",
+			allowIpv4: false,
+			remoteIP:  "::1",
+			msg:       new(dns.Msg).SetQuestion("example.com", dns.TypeA),
+			want:      false,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			h := DNS64{AllowIPv4: tc.allowIpv4}
+			rec := dnstest.NewRecorder(&test.ResponseWriter{RemoteIP: tc.remoteIP})
+			r := request.Request{W: rec, Req: tc.msg}
+
+			actual := h.requestShouldIntercept(&r)
+
+			if actual != tc.want {
+				t.Fatalf("Expected %v, but got %v", tc.want, actual)
+			}
+		})
+	}
+}
+
 func TestTo6(t *testing.T) {
 
 	v6, err := To6("64:ff9b::/96", "64.64.64.64")
@@ -379,6 +431,61 @@ func TestDNS64(t *testing.T) {
 				Answer: []dns.RR{
 					test.AAAA("example.com. 60 IN AAAA ::1"),
 					test.AAAA("example.com. 5000 IN AAAA ::2"),
+				},
+			},
+		},
+		{
+			// no AAAA records, A record response truncated.
+			name: "truncated A response",
+			req: &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:               42,
+					RecursionDesired: true,
+					Opcode:           dns.OpcodeQuery,
+				},
+				Question: []dns.Question{{"example.com.", dns.TypeAAAA, dns.ClassINET}},
+			},
+			initResp: &dns.Msg{ //success, no answers
+				MsgHdr: dns.MsgHdr{
+					Id:               42,
+					Opcode:           dns.OpcodeQuery,
+					RecursionDesired: true,
+					Rcode:            dns.RcodeSuccess,
+					Response:         true,
+				},
+				Question: []dns.Question{{"example.com.", dns.TypeAAAA, dns.ClassINET}},
+				Ns:       []dns.RR{test.SOA("example.com. 70 IN SOA foo bar 1 1 1 1 1")},
+			},
+			aResp: &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:               43,
+					Opcode:           dns.OpcodeQuery,
+					RecursionDesired: true,
+					Truncated:        true,
+					Rcode:            dns.RcodeSuccess,
+					Response:         true,
+				},
+				Question: []dns.Question{{"example.com.", dns.TypeA, dns.ClassINET}},
+				Answer: []dns.RR{
+					test.A("example.com. 60 IN A 192.0.2.42"),
+					test.A("example.com. 5000 IN A 192.0.2.43"),
+				},
+			},
+
+			resp: &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:               42,
+					Opcode:           dns.OpcodeQuery,
+					RecursionDesired: true,
+					Truncated:        true,
+					Rcode:            dns.RcodeSuccess,
+					Response:         true,
+				},
+				Question: []dns.Question{{"example.com.", dns.TypeAAAA, dns.ClassINET}},
+				Answer: []dns.RR{
+					test.AAAA("example.com. 60 IN AAAA 64:ff9b::192.0.2.42"),
+					// override RR ttl to SOA ttl, since it's lower
+					test.AAAA("example.com. 70 IN AAAA 64:ff9b::192.0.2.43"),
 				},
 			},
 		},

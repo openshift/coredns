@@ -8,6 +8,8 @@ jobs:
 
     - name: Install Go
       uses: actions/setup-go@v2
+      with:
+        go-version: '1.17.0'
       id: go
 
     - name: Check out code
@@ -23,4 +25,4 @@ jobs:
         done
 
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v2.1.0

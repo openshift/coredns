@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/coredns/coredns/plugin"
+	"github.com/coredns/coredns/plugin/metadata"
 	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/rcode"
@@ -16,9 +17,12 @@ import (
 
 	"github.com/miekg/dns"
 	ot "github.com/opentracing/opentracing-go"
+	otext "github.com/opentracing/opentracing-go/ext"
+	otlog "github.com/opentracing/opentracing-go/log"
 	zipkinot "github.com/openzipkin-contrib/zipkin-go-opentracing"
 	"github.com/openzipkin/zipkin-go"
 	zipkinhttp "github.com/openzipkin/zipkin-go/reporter/http"
+	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/opentracer"
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/tracer"
@@ -26,6 +30,7 @@ import (
 
 const (
 	defaultTopLevelSpanName = "servedns"
+	metaTraceIdKey          = "trace/traceid"
 )
 
 type traceTags struct {
@@ -139,6 +144,13 @@ func (t *trace) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	span = t.Tracer().StartSpan(defaultTopLevelSpanName)
 	defer span.Finish()
 
+	switch spanCtx := span.Context().(type) {
+	case zipkinot.SpanContext:
+		metadata.SetValueFunc(ctx, metaTraceIdKey, func() string { return spanCtx.TraceID.String() })
+	case ddtrace.SpanContext:
+		metadata.SetValueFunc(ctx, metaTraceIdKey, func() string { return fmt.Sprint(spanCtx.TraceID()) })
+	}
+
 	rw := dnstest.NewRecorder(w)
 	ctx = ot.ContextWithSpan(ctx, span)
 	status, err := plugin.NextOrFailure(t.Name(), t.Next, ctx, rw, r)
@@ -147,7 +159,18 @@ func (t *trace) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) 
 	span.SetTag(t.tagSet.Type, req.Type())
 	span.SetTag(t.tagSet.Proto, req.Proto())
 	span.SetTag(t.tagSet.Remote, req.IP())
-	span.SetTag(t.tagSet.Rcode, rcode.ToString(rw.Rcode))
+	rc := rw.Rcode
+	if !plugin.ClientWrite(status) {
+		// when no response was written, fallback to status returned from next plugin as this status
+		// is actually used as rcode of DNS response
+		// see https://github.com/coredns/coredns/blob/master/core/dnsserver/server.go#L318
+		rc = status
+	}
+	span.SetTag(t.tagSet.Rcode, rcode.ToString(rc))
+	if err != nil {
+		otext.Error.Set(span, true)
+		span.LogFields(otlog.Event("error"), otlog.Error(err))
+	}
 
 	return status, err
 }

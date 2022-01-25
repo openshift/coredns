@@ -6,7 +6,7 @@ CHECKS:=check
 BUILDOPTS:=-v
 GOPATH?=$(HOME)/go
 MAKEPWD:=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
-CGO_ENABLED:=0
+CGO_ENABLED?=0
 
 .PHONY: all
 all: coredns
@@ -20,10 +20,12 @@ check: core/plugin/zplugin.go core/dnsserver/zdirectives.go
 
 core/plugin/zplugin.go core/dnsserver/zdirectives.go: plugin.cfg
 	go generate coredns.go
+	go get
 
 .PHONY: gen
 gen:
 	go generate coredns.go
+	go get
 
 .PHONY: pb
 pb:
