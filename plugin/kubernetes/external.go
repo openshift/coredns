@@ -24,7 +24,11 @@ func (k *Kubernetes) External(state request.Request) ([]msg.Service, int) {
 	// We are dealing with a fairly normal domain name here, but we still need to have the service
 	// and the namespace:
 	// service.namespace.<base>
-	var port, protocol string
+	//
+	// for service (and SRV) you can also say _tcp, and port (i.e. _http), we need those be picked
+	// up, unless they are not specified, then we use an internal wildcard.
+	port := "*"
+	protocol := "*"
 	namespace := segs[last]
 	if !k.namespaceExposed(namespace) {
 		return nil, dns.RcodeNameError
@@ -65,7 +69,7 @@ func (k *Kubernetes) External(state request.Request) ([]msg.Service, int) {
 
 		for _, ip := range svc.ExternalIPs {
 			for _, p := range svc.Ports {
-				if !(matchPortAndProtocol(port, p.Name, protocol, string(p.Protocol))) {
+				if !(match(port, p.Name) && match(protocol, string(p.Protocol))) {
 					continue
 				}
 				rcode = dns.RcodeSuccess
