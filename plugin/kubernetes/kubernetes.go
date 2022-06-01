@@ -15,7 +15,6 @@ import (
 	"github.com/coredns/coredns/plugin/kubernetes/object"
 	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/fall"
-	"github.com/coredns/coredns/plugin/pkg/upstream"
 	"github.com/coredns/coredns/request"
 
 	"github.com/miekg/dns"
@@ -35,7 +34,7 @@ import (
 type Kubernetes struct {
 	Next             plugin.Handler
 	Zones            []string
-	Upstream         *upstream.Upstream
+	Upstream         Upstreamer
 	APIServerList    []string
 	APICertAuth      string
 	APIClientCert    string
@@ -51,6 +50,11 @@ type Kubernetes struct {
 	primaryZoneIndex int
 	localIPs         []net.IP
 	autoPathSearch   []string // Local search path from /etc/resolv.conf. Needed for autopath.
+}
+
+// Upstreamer is used to resolve CNAME or other external targets
+type Upstreamer interface {
+	Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error)
 }
 
 // New returns a initialized Kubernetes. It default interfaceAddrFunc to return 127.0.0.1. All other
@@ -272,16 +276,23 @@ func (k *Kubernetes) InitKubeCache(ctx context.Context) (onStart func() error, o
 			k.APIConn.Run()
 		}()
 
-		timeout := time.After(5 * time.Second)
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
+		timeout := 5 * time.Second
+		timeoutTicker := time.NewTicker(timeout)
+		defer timeoutTicker.Stop()
+		logDelay := 500 * time.Millisecond
+		logTicker := time.NewTicker(logDelay)
+		defer logTicker.Stop()
+		checkSyncTicker := time.NewTicker(100 * time.Millisecond)
+		defer checkSyncTicker.Stop()
 		for {
 			select {
-			case <-ticker.C:
+			case <-checkSyncTicker.C:
 				if k.APIConn.HasSynced() {
 					return nil
 				}
-			case <-timeout:
+			case <-logTicker.C:
+				log.Info("waiting for Kubernetes API before starting server")
+			case <-timeoutTicker.C:
 				log.Warning("starting server with unsynced Kubernetes API")
 				return nil
 			}
@@ -305,11 +316,20 @@ func (k *Kubernetes) InitKubeCache(ctx context.Context) (onStart func() error, o
 func (k *Kubernetes) endpointSliceSupported(kubeClient *kubernetes.Clientset) (bool, string) {
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
+	logTicker := time.NewTicker(10 * time.Second)
+	defer logTicker.Stop()
+	var connErr error
 	for {
 		select {
+		case <-logTicker.C:
+			if connErr == nil {
+				continue
+			}
+			log.Warningf("Kubernetes API connection failure: %v", connErr)
 		case <-ticker.C:
 			sv, err := kubeClient.ServerVersion()
 			if err != nil {
+				connErr = err
 				continue
 			}
 
@@ -329,6 +349,7 @@ func (k *Kubernetes) endpointSliceSupported(kubeClient *kubernetes.Clientset) (b
 			if err == nil {
 				return true, discovery.SchemeGroupVersion.String()
 			} else if !kerrors.IsNotFound(err) {
+				connErr = err
 				continue
 			}
 
@@ -336,6 +357,7 @@ func (k *Kubernetes) endpointSliceSupported(kubeClient *kubernetes.Clientset) (b
 			if err == nil {
 				return true, discoveryV1beta1.SchemeGroupVersion.String()
 			} else if !kerrors.IsNotFound(err) {
+				connErr = err
 				continue
 			}
 
@@ -593,7 +615,7 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 }
 
 // Serial return the SOA serial.
-func (k *Kubernetes) Serial(state request.Request) uint32 { return uint32(k.APIConn.Modified()) }
+func (k *Kubernetes) Serial(state request.Request) uint32 { return uint32(k.APIConn.Modified(false)) }
 
 // MinTTL returns the minimal TTL.
 func (k *Kubernetes) MinTTL(state request.Request) uint32 { return k.ttl }

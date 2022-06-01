@@ -74,8 +74,10 @@ type Enterprise struct {
 		IsLegitimateProxy            bool    `maxminddb:"is_legitimate_proxy"`
 		IsSatelliteProvider          bool    `maxminddb:"is_satellite_provider"`
 		ISP                          string  `maxminddb:"isp"`
-		StaticIPScore                float64 `maxminddb:"static_ip_score"`
+		MobileCountryCode            string  `maxminddb:"mobile_country_code"`
+		MobileNetworkCode            string  `maxminddb:"mobile_network_code"`
 		Organization                 string  `maxminddb:"organization"`
+		StaticIPScore                float64 `maxminddb:"static_ip_score"`
 		UserType                     string  `maxminddb:"user_type"`
 	} `maxminddb:"traits"`
 }
@@ -198,6 +200,8 @@ type ISP struct {
 	AutonomousSystemNumber       uint   `maxminddb:"autonomous_system_number"`
 	AutonomousSystemOrganization string `maxminddb:"autonomous_system_organization"`
 	ISP                          string `maxminddb:"isp"`
+	MobileCountryCode            string `maxminddb:"mobile_country_code"`
+	MobileNetworkCode            string `maxminddb:"mobile_network_code"`
 	Organization                 string `maxminddb:"organization"`
 }
 
@@ -259,7 +263,7 @@ func Open(file string) (*Reader, error) {
 
 // FromBytes takes a byte slice corresponding to a GeoIP2/GeoLite2 database
 // file and returns a Reader struct or an error. Note that the byte slice is
-// use directly; any modification of it after opening the database will result
+// used directly; any modification of it after opening the database will result
 // in errors while reading from the database.
 func FromBytes(bytes []byte) (*Reader, error) {
 	reader, err := maxminddb.FromBytes(bytes)
