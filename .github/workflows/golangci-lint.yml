@@ -1,0 +1,17 @@
+name: golangci-lint
+on:
+  pull_request:
+jobs:
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f
+        with:
+          go-version: '1.19.0'
+      - uses: actions/checkout@v3
+      # See https://github.com/golangci/golangci-lint-action/issues/442#issuecomment-1203786890
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.47.3
+      - name: Run golangci-lint
+        run: golangci-lint run --version --verbose --out-format=github-actions

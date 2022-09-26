@@ -42,7 +42,7 @@ func (k *Kubernetes) Transfer(zone string, serial uint32) (<-chan []dns.RR, erro
 		}
 		ch <- soa
 
-		nsAddrs := k.nsAddrs(false, zone)
+		nsAddrs := k.nsAddrs(false, false, zone)
 		nsHosts := make(map[string]struct{})
 		for _, nsAddr := range nsAddrs {
 			nsHost := nsAddr.Header().Name
@@ -63,7 +63,6 @@ func (k *Kubernetes) Transfer(zone string, serial uint32) (<-chan []dns.RR, erro
 			}
 			svcBase := []string{zonePath, Svc, svc.Namespace, svc.Name}
 			switch svc.Type {
-
 			case api.ServiceTypeClusterIP, api.ServiceTypeNodePort, api.ServiceTypeLoadBalancer:
 				clusterIP := net.ParseIP(svc.ClusterIPs[0])
 				if clusterIP != nil {
