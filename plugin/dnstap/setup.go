@@ -1,13 +1,14 @@
 package dnstap
 
 import (
+	"net/url"
+	"os"
 	"strings"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
-	"github.com/coredns/coredns/plugin/pkg/parse"
 )
 
 var log = clog.NewWithPlugin("dnstap")
@@ -19,17 +20,21 @@ func parseConfig(c *caddy.Controller) (Dnstap, error) {
 	d := Dnstap{}
 	endpoint := ""
 
-	if !c.Args(&endpoint) {
+	args := c.RemainingArgs()
+
+	if len(args) == 0 {
 		return d, c.ArgErr()
 	}
 
+	endpoint = args[0]
+
 	if strings.HasPrefix(endpoint, "tcp://") {
-		// remote IP endpoint
-		servers, err := parse.HostPortOrFile(endpoint[6:])
+		// remote network endpoint
+		endpointURL, err := url.Parse(endpoint)
 		if err != nil {
 			return d, c.ArgErr()
 		}
-		dio := newIO("tcp", servers[0])
+		dio := newIO("tcp", endpointURL.Host)
 		d = Dnstap{io: dio}
 	} else {
 		endpoint = strings.TrimPrefix(endpoint, "unix://")
@@ -37,7 +42,30 @@ func parseConfig(c *caddy.Controller) (Dnstap, error) {
 		d = Dnstap{io: dio}
 	}
 
-	d.IncludeRawMessage = c.NextArg() && c.Val() == "full"
+	d.IncludeRawMessage = len(args) == 2 && args[1] == "full"
+
+	hostname, _ := os.Hostname()
+	d.Identity = []byte(hostname)
+	d.Version = []byte(caddy.AppName + "-" + caddy.AppVersion)
+
+	for c.NextBlock() {
+		switch c.Val() {
+		case "identity":
+			{
+				if !c.NextArg() {
+					return d, c.ArgErr()
+				}
+				d.Identity = []byte(c.Val())
+			}
+		case "version":
+			{
+				if !c.NextArg() {
+					return d, c.ArgErr()
+				}
+				d.Version = []byte(c.Val())
+			}
+		}
+	}
 
 	return d, nil
 }

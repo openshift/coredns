@@ -32,7 +32,6 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 	handler.Templates = make([]template, 0)
 
 	for c.Next() {
-
 		if !c.NextArg() {
 			return handler, c.ArgErr()
 		}
@@ -81,7 +80,7 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 					return handler, c.ArgErr()
 				}
 				for _, answer := range args {
-					tmpl, err := gotmpl.New("answer").Parse(answer)
+					tmpl, err := newTemplate("answer", answer)
 					if err != nil {
 						return handler, c.Errf("could not compile template: %s, %v", c.Val(), err)
 					}
@@ -94,7 +93,7 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 					return handler, c.ArgErr()
 				}
 				for _, additional := range args {
-					tmpl, err := gotmpl.New("additional").Parse(additional)
+					tmpl, err := newTemplate("additional", additional)
 					if err != nil {
 						return handler, c.Errf("could not compile template: %s, %v\n", c.Val(), err)
 					}
@@ -107,7 +106,7 @@ func templateParse(c *caddy.Controller) (handler Handler, err error) {
 					return handler, c.ArgErr()
 				}
 				for _, authority := range args {
-					tmpl, err := gotmpl.New("authority").Parse(authority)
+					tmpl, err := newTemplate("authority", authority)
 					if err != nil {
 						return handler, c.Errf("could not compile template: %s, %v\n", c.Val(), err)
 					}

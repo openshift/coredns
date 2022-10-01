@@ -27,6 +27,7 @@ func TestTransferAXFR(t *testing.T) {
 	k.APIConn = &external{}
 
 	e := New()
+	e.headless = true
 	e.Zones = []string{"example.com."}
 	e.externalFunc = k.External
 	e.externalAddrFunc = externalAddress  // internal test function
@@ -59,6 +60,12 @@ func TestTransferAXFR(t *testing.T) {
 			if ans.Header().Rrtype == dns.TypeTXT {
 				continue
 			}
+
+			// Exclude PTR records
+			if ans.Header().Rrtype == dns.TypePTR {
+				continue
+			}
+
 			expect = append(expect, ans)
 		}
 	}
@@ -78,7 +85,6 @@ func TestTransferAXFR(t *testing.T) {
 			t.Errorf("%+v", rec)
 		}
 	}
-
 }
 
 func TestTransferIXFR(t *testing.T) {
@@ -88,6 +94,7 @@ func TestTransferIXFR(t *testing.T) {
 
 	e := New()
 	e.Zones = []string{"example.com."}
+	e.headless = true
 	e.externalFunc = k.External
 	e.externalAddrFunc = externalAddress  // internal test function
 	e.externalSerialFunc = externalSerial // internal test function
@@ -122,7 +129,6 @@ func TestTransferIXFR(t *testing.T) {
 			t.Errorf("%+v", rec)
 		}
 	}
-
 }
 
 // difference shows what we're missing when comparing two RR slices

@@ -97,7 +97,6 @@ var (
 func (k *Kubernetes) Services(ctx context.Context, state request.Request, exact bool, opt plugin.Options) (svcs []msg.Service, err error) {
 	// We're looking again at types, which we've already done in ServeDNS, but there are some types k8s just can't answer.
 	switch state.QType() {
-
 	case dns.TypeTXT:
 		// 1 label + zone, label must be "dns-version".
 		t, _ := dnsutil.TrimZone(state.Name(), state.Zone)
@@ -114,7 +113,7 @@ func (k *Kubernetes) Services(ctx context.Context, state request.Request, exact 
 
 	case dns.TypeNS:
 		// We can only get here if the qname equals the zone, see ServeDNS in handler.go.
-		nss := k.nsAddrs(false, state.Zone)
+		nss := k.nsAddrs(false, false, state.Zone)
 		var svcs []msg.Service
 		for _, ns := range nss {
 			if ns.Header().Rrtype == dns.TypeA {
@@ -129,7 +128,7 @@ func (k *Kubernetes) Services(ctx context.Context, state request.Request, exact 
 	}
 
 	if isDefaultNS(state.Name(), state.Zone) {
-		nss := k.nsAddrs(false, state.Zone)
+		nss := k.nsAddrs(false, false, state.Zone)
 		var svcs []msg.Service
 		for _, ns := range nss {
 			if ns.Header().Rrtype == dns.TypeA && state.QType() == dns.TypeA {
@@ -217,7 +216,6 @@ func (k *Kubernetes) getClientConfig() (*rest.Config, error) {
 	}
 	cc.ContentType = "application/vnd.kubernetes.protobuf"
 	return cc, err
-
 }
 
 // InitKubeCache initializes a new Kubernetes cache.
@@ -571,7 +569,6 @@ func (k *Kubernetes) findServices(r recordRequest, zone string) (services []msg.
 
 				for _, eps := range ep.Subsets {
 					for _, addr := range eps.Addresses {
-
 						// See comments in parse.go parseRequest about the endpoint handling.
 						if r.endpoint != "" {
 							if !match(r.endpoint, endpointHostname(addr, k.endpointNameMode)) {
