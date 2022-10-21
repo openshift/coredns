@@ -140,7 +140,6 @@ func setDo(m *dns.Msg) {
 	o := m.IsEdns0()
 	if o != nil {
 		o.SetDo()
-		o.SetUDPSize(defaultUDPBufSize)
 		return
 	}
 
@@ -152,4 +151,4 @@ func setDo(m *dns.Msg) {
 
 // defaultUDPBufsize is the bufsize the cache plugin uses on outgoing requests that don't
 // have an OPT RR.
-const defaultUDPBufSize = 2048
+const defaultUDPBufSize = 512
