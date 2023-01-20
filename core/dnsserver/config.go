@@ -9,6 +9,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 )
 
+// Test
 // Config configuration for a single server.
 type Config struct {
 	// The zone of the site.
