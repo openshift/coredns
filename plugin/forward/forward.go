@@ -49,7 +49,7 @@ type Forward struct {
 	// the maximum allowed (maxConcurrent)
 	ErrLimitExceeded error
 
-	tapPlugin *dnstap.Dnstap // when the dnstap plugin is loaded, we use to this to send messages out.
+	tapPlugins []*dnstap.Dnstap // when dnstap plugins are loaded, we use to this to send messages out.
 
 	Next plugin.Handler
 }
@@ -64,6 +64,14 @@ func New() *Forward {
 func (f *Forward) SetProxy(p *Proxy) {
 	f.proxies = append(f.proxies, p)
 	p.start(f.hcInterval)
+}
+
+// SetTapPlugin appends one or more dnstap plugins to the tap plugin list.
+func (f *Forward) SetTapPlugin(tapPlugin *dnstap.Dnstap) {
+	f.tapPlugins = append(f.tapPlugins, tapPlugin)
+	if nextPlugin, ok := tapPlugin.Next.(*dnstap.Dnstap); ok {
+		f.SetTapPlugin(nextPlugin)
+	}
 }
 
 // Len returns the number of configured proxies.
@@ -150,7 +158,7 @@ func (f *Forward) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 			child.Finish()
 		}
 
-		if f.tapPlugin != nil {
+		if len(f.tapPlugins) != 0 {
 			toDnstap(f, proxy.addr, state, opts, ret, start)
 		}
 
