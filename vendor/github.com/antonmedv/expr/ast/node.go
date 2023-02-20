@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"regexp"
 
+	"github.com/antonmedv/expr/builtin"
 	"github.com/antonmedv/expr/file"
 )
 
@@ -48,8 +49,11 @@ type NilNode struct {
 
 type IdentifierNode struct {
 	base
-	Value   string
-	NilSafe bool
+	Value       string
+	Deref       bool
+	FieldIndex  []int
+	Method      bool // true if method, false if field
+	MethodIndex int  // index of method, set only if Method is true
 }
 
 type IntegerNode struct {
@@ -85,29 +89,27 @@ type UnaryNode struct {
 
 type BinaryNode struct {
 	base
+	Regexp   *regexp.Regexp
 	Operator string
 	Left     Node
 	Right    Node
 }
 
-type MatchesNode struct {
+type ChainNode struct {
 	base
-	Regexp *regexp.Regexp
-	Left   Node
-	Right  Node
+	Node Node
 }
 
-type PropertyNode struct {
+type MemberNode struct {
 	base
-	Node     Node
-	Property string
-	NilSafe  bool
-}
-
-type IndexNode struct {
-	base
-	Node  Node
-	Index Node
+	Node        Node
+	Property    Node
+	Name        string
+	Optional    bool
+	Deref       bool
+	FieldIndex  []int
+	Method      bool
+	MethodIndex int
 }
 
 type SliceNode struct {
@@ -117,19 +119,13 @@ type SliceNode struct {
 	To   Node
 }
 
-type MethodNode struct {
+type CallNode struct {
 	base
-	Node      Node
-	Method    string
+	Callee    Node
 	Arguments []Node
-	NilSafe   bool
-}
-
-type FunctionNode struct {
-	base
-	Name      string
-	Arguments []Node
+	Typed     int
 	Fast      bool
+	Func      *builtin.Function
 }
 
 type BuiltinNode struct {

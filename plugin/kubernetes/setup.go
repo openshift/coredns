@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync/atomic"
-	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
@@ -19,9 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/miekg/dns"
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"       // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
-	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"      // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
-	_ "k8s.io/client-go/plugin/pkg/client/auth/openstack" // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc" // pull this in here, because we want it excluded if plugin.cfg doesn't have k8s
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
 )
@@ -60,25 +56,6 @@ func setup(c *caddy.Controller) error {
 	// get locally bound addresses
 	c.OnStartup(func() error {
 		k.localIPs = boundIPs(c)
-		return nil
-	})
-
-	wildWarner := time.NewTicker(10 * time.Second)
-	c.OnStartup(func() error {
-		go func() {
-			for {
-				select {
-				case <-wildWarner.C:
-					if wc := atomic.SwapUint64(&wildCount, 0); wc > 0 {
-						log.Warningf("%d deprecated wildcard queries received. Wildcard queries will no longer be supported in the next minor release.", wc)
-					}
-				}
-			}
-		}()
-		return nil
-	})
-	c.OnShutdown(func() error {
-		wildWarner.Stop()
 		return nil
 	})
 

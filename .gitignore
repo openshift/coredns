@@ -3,5 +3,6 @@ Corefile
 *.swp
 /coredns
 coredns.exe
+Corefile
 build/
 release/

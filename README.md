@@ -2,9 +2,7 @@
 
 [![Documentation](https://img.shields.io/badge/godoc-reference-blue.svg)](https://godoc.org/github.com/coredns/coredns)
 ![CodeQL](https://github.com/coredns/coredns/actions/workflows/codeql-analysis.yml/badge.svg)
-![Go Fmt](https://github.com/coredns/coredns/actions/workflows/go.fmt.yml/badge.svg)
 ![Go Tests](https://github.com/coredns/coredns/actions/workflows/go.test.yml/badge.svg)
-![Go Tidy](https://github.com/coredns/coredns/actions/workflows/go.tidy.yml/badge.svg)
 [![CircleCI](https://circleci.com/gh/coredns/coredns.svg?style=shield)](https://circleci.com/gh/coredns/coredns)
 [![Code Coverage](https://img.shields.io/codecov/c/github/coredns/coredns/master.svg)](https://codecov.io/github/coredns/coredns?branch=master)
 [![Docker Pulls](https://img.shields.io/docker/pulls/coredns/coredns.svg)](https://hub.docker.com/r/coredns/coredns)
@@ -258,7 +256,7 @@ More resources can be found:
 ## Contribution guidelines
 
 If you want to contribute to CoreDNS, be sure to review the [contribution
-guidelines](CONTRIBUTING.md).
+guidelines](./.github/CONTRIBUTING.md).
 
 ## Deployment
 
@@ -294,4 +292,4 @@ issue, instead send your report privately to `security@coredns.io`. Security rep
 appreciated and we will publicly thank you for it.
 
 Please consult [security vulnerability disclosures and security fix and release process
-document](https://github.com/coredns/coredns/blob/master/SECURITY.md)
+document](https://github.com/coredns/coredns/blob/master/.github/SECURITY.md)
