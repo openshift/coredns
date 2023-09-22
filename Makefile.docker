@@ -32,9 +32,9 @@ DOCKER:=
 NAME:=coredns
 GITHUB:=https://github.com/coredns/coredns/releases/download
 # mips is not in LINUX_ARCH because it's not supported by docker manifest. Keep this list in sync with the one in Makefile.release
-LINUX_ARCH:=amd64 arm arm64 mips64le ppc64le s390x
+LINUX_ARCH:=amd64 arm arm64 mips64le ppc64le s390x riscv64
 DOCKER_IMAGE_NAME:=$(DOCKER)/$(NAME)
-DOCKER_IMAGE_LIST_VERSIONED:=$(shell echo $(LINUX_ARCH) | sed -e "s~[^ ]*~$(DOCKER_IMAGE_NAME):&\-$(VERSION)~g")
+DOCKER_IMAGE_LIST_VERSIONED:=$(shell echo $(LINUX_ARCH) | sed -e "s~mips64le ~~g" | sed -e "s~[^ ]*~$(DOCKER_IMAGE_NAME):&\-$(VERSION)~g")
 
 all:
 	@echo Use the 'release' target to download released binaries and build containers per arch, 'docker-push' to build and push a multi arch manifest.
@@ -73,7 +73,6 @@ endif
 		mkdir build/docker/$${arch}; \
 		curl -L $(GITHUB)/v$(VERSION)/coredns_$(VERSION)_linux_$${arch}.tgz > build/docker/$${arch}/coredns.tgz && \
 			( cd build/docker/$${arch}; tar xf coredns.tgz && rm coredns.tgz ); \
-			cp Dockerfile build/docker/$${arch} ; \
 	done
 
 .PHONY: docker-build
@@ -83,12 +82,20 @@ ifeq ($(DOCKER),)
 else
 	docker version
 	for arch in $(LINUX_ARCH); do \
-	    DOCKER_BUILDKIT=1 docker build --platform=$${arch} -t $(DOCKER_IMAGE_NAME):$${arch}-$(VERSION) build/docker/$${arch} ;\
+	    cp Dockerfile build/docker/$${arch} ; \
+	    DOCKER_ARGS=""; \
+	    if [ "$${arch}" = "riscv64" ]; then \
+	        DOCKER_ARGS="--build-arg=DEBIAN_IMAGE=debian:unstable-slim --build-arg=BASE=ghcr.io/go-riscv/distroless/static-unstable:nonroot"; \
+	    fi; \
+	    DOCKER_BUILDKIT=1 docker build --platform=$${arch} -t $(DOCKER_IMAGE_NAME):$${arch}-$(VERSION) $${DOCKER_ARGS} build/docker/$${arch} ;\
 	done
 endif
 
 .PHONY: docker-push
 docker-push:
+ifeq ($(VERSION),)
+	$(error "Please specify a version use. Use VERSION=<version>")
+endif
 ifeq ($(DOCKER),)
 	$(error "Please specify Docker registry to use. Use DOCKER=coredns for releases")
 else

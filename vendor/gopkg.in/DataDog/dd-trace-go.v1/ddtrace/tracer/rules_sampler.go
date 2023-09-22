@@ -16,11 +16,11 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/time/rate"
-
 	"gopkg.in/DataDog/dd-trace-go.v1/ddtrace/ext"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/log"
 	"gopkg.in/DataDog/dd-trace-go.v1/internal/samplernames"
+
+	"golang.org/x/time/rate"
 )
 
 // rulesSampler holds instances of trace sampler and single span sampler, that are configured with the given set of rules.
@@ -364,7 +364,7 @@ func (rs *singleSpanRulesSampler) apply(span *span) bool {
 					return false
 				}
 			}
-			span.setMetric(keySpanSamplingMechanism, samplingMechanismSingleSpan)
+			span.setMetric(keySpanSamplingMechanism, float64(samplernames.SingleSpan))
 			span.setMetric(keySingleSpanSamplingRuleRate, rate)
 			if rule.MaxPerSecond != 0 {
 				span.setMetric(keySingleSpanSamplingMPS, rule.MaxPerSecond)

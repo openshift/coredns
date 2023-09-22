@@ -18,9 +18,11 @@ func Fetch(from, i interface{}) interface{} {
 
 	// Methods can be defined on any type.
 	if v.NumMethod() > 0 {
-		method := v.MethodByName(i.(string))
-		if method.IsValid() {
-			return method.Interface()
+		if methodName, ok := i.(string); ok {
+			method := v.MethodByName(methodName)
+			if method.IsValid() {
+				return method.Interface()
+			}
 		}
 	}
 
@@ -46,7 +48,12 @@ func Fetch(from, i interface{}) interface{} {
 		}
 
 	case reflect.Map:
-		value := v.MapIndex(reflect.ValueOf(i))
+		var value reflect.Value
+		if i == nil {
+			value = v.MapIndex(reflect.Zero(v.Type().Key()))
+		} else {
+			value = v.MapIndex(reflect.ValueOf(i))
+		}
 		if value.IsValid() {
 			return value.Interface()
 		} else {
@@ -146,13 +153,15 @@ func Deref(i interface{}) interface{} {
 		v = v.Elem()
 	}
 
-	if v.Kind() == reflect.Ptr {
+loop:
+	for v.Kind() == reflect.Ptr {
 		if v.IsNil() {
 			return i
 		}
 		indirect := reflect.Indirect(v)
 		switch indirect.Kind() {
 		case reflect.Struct, reflect.Map, reflect.Array, reflect.Slice:
+			break loop
 		default:
 			v = v.Elem()
 		}
@@ -219,11 +228,16 @@ func In(needle interface{}, array interface{}) bool {
 		return false
 
 	case reflect.Map:
-		n := reflect.ValueOf(needle)
-		if !n.IsValid() {
-			panic(fmt.Sprintf("cannot use %T as index to %T", needle, array))
+		var value reflect.Value
+		if needle == nil {
+			value = v.MapIndex(reflect.Zero(v.Type().Key()))
+		} else {
+			n := reflect.ValueOf(needle)
+			if !n.IsValid() {
+				panic(fmt.Sprintf("cannot use %T as index to %T", needle, array))
+			}
+			value = v.MapIndex(n)
 		}
-		value := v.MapIndex(n)
 		if value.IsValid() {
 			return true
 		}

@@ -61,6 +61,9 @@ func (vm *VM) Run(program *Program, env interface{}) (_ interface{}, err error) 
 				Location: program.Locations[vm.ip-1],
 				Message:  fmt.Sprintf("%v", r),
 			}
+			if err, ok := r.(error); ok {
+				f.Wrap(err)
+			}
 			err = f.Bind(program.Source)
 		}
 	}()
@@ -89,6 +92,9 @@ func (vm *VM) Run(program *Program, env interface{}) (_ interface{}, err error) 
 		vm.ip += 1
 
 		switch op {
+
+		case OpInvalid:
+			panic("invalid opcode")
 
 		case OpPush:
 			vm.push(program.Constants[arg])
@@ -119,6 +125,9 @@ func (vm *VM) Run(program *Program, env interface{}) (_ interface{}, err error) 
 		case OpFetchField:
 			a := vm.pop()
 			vm.push(runtime.FetchField(a, program.Constants[arg].(*runtime.Field)))
+
+		case OpLoadEnv:
+			vm.push(env)
 
 		case OpMethod:
 			a := vm.pop()

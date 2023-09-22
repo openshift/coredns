@@ -3,7 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/antonmedv/expr)](https://goreportcard.com/report/github.com/antonmedv/expr) 
 [![GoDoc](https://godoc.org/github.com/antonmedv/expr?status.svg)](https://godoc.org/github.com/antonmedv/expr)
 
-<img src="docs/images/logo-small.png" width="150" alt="expr logo" align="right">
+<img src="https://expr.medv.io/img/logo-small.png" width="150" alt="expr logo" align="right"/>
 
 **Expr** package provides an engine that can compile and evaluate expressions. 
 An expression is a one-liner that returns a value (mostly, but not limited to, booleans).
@@ -50,13 +50,13 @@ go get github.com/antonmedv/expr
 
 ## Documentation
 
-* See [Getting Started](docs/Getting-Started.md) page for developer documentation.
-* See [Language Definition](docs/Language-Definition.md) page to learn the syntax.
+* See [Getting Started](https://expr.medv.io/docs/Getting-Started) page for developer documentation.
+* See [Language Definition](https://expr.medv.io/docs/Language-Definition) page to learn the syntax.
 
 ## Expr Code Editor
 
 <a href="https://bit.ly/expr-code-editor">
-	<img src="https://antonmedv.github.io/expr/ogimage.png" align="center" alt="Expr Code Editor" width="1200">
+  <img src="https://antonmedv.github.io/expr/ogimage.png" align="center" alt="Expr Code Editor" width="1200"/>
 </a>
 
 Also, I have an embeddable code editor written in JavaScript which allows editing expressions with syntax highlighting and autocomplete based on your types declaration.
@@ -157,4 +157,4 @@ func main() {
 
 ## License
 
-[MIT](LICENSE)
+[MIT](https://github.com/antonmedv/expr/blob/master/LICENSE)
