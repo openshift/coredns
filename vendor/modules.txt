@@ -183,7 +183,7 @@ github.com/ebitengine/purego/internal/strings
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
 github.com/emicklei/go-restful/v3/log
-# github.com/evanphx/json-patch v4.12.0+incompatible
+# github.com/evanphx/json-patch v5.6.0+incompatible
 ## explicit
 github.com/evanphx/json-patch
 # github.com/farsightsec/golang-framestream v0.3.0
@@ -198,7 +198,7 @@ github.com/go-logr/logr
 # github.com/go-openapi/jsonpointer v0.19.6
 ## explicit; go 1.13
 github.com/go-openapi/jsonpointer
-# github.com/go-openapi/jsonreference v0.20.1
+# github.com/go-openapi/jsonreference v0.20.2
 ## explicit; go 1.13
 github.com/go-openapi/jsonreference
 github.com/go-openapi/jsonreference/internal
@@ -232,16 +232,17 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/gnostic v0.5.7-v3refs
-## explicit; go 1.12
-github.com/google/gnostic/compiler
-github.com/google/gnostic/extensions
-github.com/google/gnostic/jsonschema
-github.com/google/gnostic/openapiv2
-github.com/google/gnostic/openapiv3
+# github.com/google/gnostic-models v0.6.8
+## explicit; go 1.18
+github.com/google/gnostic-models/compiler
+github.com/google/gnostic-models/extensions
+github.com/google/gnostic-models/jsonschema
+github.com/google/gnostic-models/openapiv2
+github.com/google/gnostic-models/openapiv3
 # github.com/google/go-cmp v0.5.9
 ## explicit; go 1.13
 github.com/google/go-cmp/cmp
+github.com/google/go-cmp/cmp/cmpopts
 github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
@@ -349,6 +350,30 @@ github.com/onsi/ginkgo/v2/internal/interrupt_handler
 github.com/onsi/ginkgo/v2/internal/parallel_support
 github.com/onsi/ginkgo/v2/reporters
 github.com/onsi/ginkgo/v2/types
+# github.com/openshift/api v0.0.0-20231017161003-8f2e18642ccb
+## explicit; go 1.20
+github.com/openshift/api/config/v1
+github.com/openshift/api/network/v1
+github.com/openshift/api/network/v1alpha1
+# github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6
+## explicit; go 1.20
+github.com/openshift/client-go/network/applyconfigurations/internal
+github.com/openshift/client-go/network/applyconfigurations/network/v1
+github.com/openshift/client-go/network/applyconfigurations/network/v1alpha1
+github.com/openshift/client-go/network/clientset/versioned
+github.com/openshift/client-go/network/clientset/versioned/scheme
+github.com/openshift/client-go/network/clientset/versioned/typed/network/v1
+github.com/openshift/client-go/network/clientset/versioned/typed/network/v1alpha1
+github.com/openshift/client-go/network/informers/externalversions
+github.com/openshift/client-go/network/informers/externalversions/internalinterfaces
+github.com/openshift/client-go/network/informers/externalversions/network
+github.com/openshift/client-go/network/informers/externalversions/network/v1
+github.com/openshift/client-go/network/informers/externalversions/network/v1alpha1
+github.com/openshift/client-go/network/listers/network/v1
+github.com/openshift/client-go/network/listers/network/v1alpha1
+# github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14
+## explicit; go 1.21
+github.com/openshift/coredns-ocp-dnsnameresolver
 # github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492
 ## explicit
 github.com/opentracing-contrib/go-observer
@@ -754,7 +779,7 @@ gopkg.in/yaml.v3
 # inet.af/netaddr v0.0.0-20220811202034-502d2d690317
 ## explicit; go 1.12
 inet.af/netaddr
-# k8s.io/api v0.27.4
+# k8s.io/api v0.28.2
 ## explicit; go 1.20
 k8s.io/api/admissionregistration/v1
 k8s.io/api/admissionregistration/v1alpha1
@@ -808,7 +833,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apimachinery v0.27.4
+# k8s.io/apimachinery v0.28.2
 ## explicit; go 1.20
 k8s.io/apimachinery/pkg/api/equality
 k8s.io/apimachinery/pkg/api/errors
@@ -836,6 +861,7 @@ k8s.io/apimachinery/pkg/selection
 k8s.io/apimachinery/pkg/types
 k8s.io/apimachinery/pkg/util/cache
 k8s.io/apimachinery/pkg/util/diff
+k8s.io/apimachinery/pkg/util/dump
 k8s.io/apimachinery/pkg/util/errors
 k8s.io/apimachinery/pkg/util/framer
 k8s.io/apimachinery/pkg/util/intstr
@@ -856,7 +882,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/json
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/client-go v0.27.4
+# k8s.io/client-go v0.28.2
 ## explicit; go 1.20
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1alpha1
@@ -1041,6 +1067,7 @@ k8s.io/client-go/util/connrotation
 k8s.io/client-go/util/flowcontrol
 k8s.io/client-go/util/homedir
 k8s.io/client-go/util/keyutil
+k8s.io/client-go/util/retry
 k8s.io/client-go/util/workqueue
 # k8s.io/klog/v2 v2.100.1
 ## explicit; go 1.13
@@ -1050,7 +1077,7 @@ k8s.io/klog/v2/internal/clock
 k8s.io/klog/v2/internal/dbg
 k8s.io/klog/v2/internal/serialize
 k8s.io/klog/v2/internal/severity
-# k8s.io/kube-openapi v0.0.0-20230501164219-8b0f38b5fd1f
+# k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9
 ## explicit; go 1.19
 k8s.io/kube-openapi/pkg/builder3/util
 k8s.io/kube-openapi/pkg/cached
@@ -1064,7 +1091,7 @@ k8s.io/kube-openapi/pkg/schemamutation
 k8s.io/kube-openapi/pkg/spec3
 k8s.io/kube-openapi/pkg/util/proto
 k8s.io/kube-openapi/pkg/validation/spec
-# k8s.io/utils v0.0.0-20230209194617-a36077c30491
+# k8s.io/utils v0.0.0-20230505201702-9f6742963106
 ## explicit; go 1.18
 k8s.io/utils/buffer
 k8s.io/utils/clock

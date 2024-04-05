@@ -37,6 +37,7 @@ var Directives = []string{
 	"loadbalance",
 	"tsig",
 	"cache",
+	"ocp_dnsnameresolver",
 	"rewrite",
 	"header",
 	"dnssec",
