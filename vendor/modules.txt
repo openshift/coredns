@@ -367,8 +367,8 @@ github.com/openshift/client-go/network/informers/externalversions/network/v1
 github.com/openshift/client-go/network/informers/externalversions/network/v1alpha1
 github.com/openshift/client-go/network/listers/network/v1
 github.com/openshift/client-go/network/listers/network/v1alpha1
-# github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14
-## explicit; go 1.21
+# github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14 => github.com/arkadeepsen/coredns-ocp-dnsnameresolver v0.0.0-20240607070011-d29acd82108e
+## explicit; go 1.22
 github.com/openshift/coredns-ocp-dnsnameresolver
 # github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492
 ## explicit
@@ -1113,3 +1113,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
+# github.com/openshift/coredns-ocp-dnsnameresolver => github.com/arkadeepsen/coredns-ocp-dnsnameresolver v0.0.0-20240607070011-d29acd82108e
