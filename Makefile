@@ -1,12 +1,16 @@
 # Makefile for building CoreDNS
-GITCOMMIT:=$(shell git describe --dirty --always)
+GITCOMMIT?=$(shell git describe --dirty --always)
 BINARY:=coredns
 SYSTEM:=
 CHECKS:=check
-BUILDOPTS:=-v
+BUILDOPTS?=-v
 GOPATH?=$(HOME)/go
 MAKEPWD:=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 CGO_ENABLED?=0
+GOLANG_VERSION ?= $(shell cat .go-version)
+
+export GOSUMDB = sum.golang.org
+export GOTOOLCHAIN = go$(GOLANG_VERSION)
 
 .PHONY: all
 all: coredns
@@ -35,19 +39,3 @@ pb:
 clean:
 	go clean
 	rm -f coredns
-
-.PHONY: dep-ensure
-dep-ensure:
-	dep version || go get -u github.com/golang/dep/cmd/dep
-	dep ensure -v
-	dep prune -v
-	find vendor -name '*_test.go' -delete
-
-.PHONY: test
-test: check
-	( cd request ; go test -v -race ./... )
-	( cd core ; go test -v -race  ./... )
-	( cd coremain ; go test -v -race ./... )
-	( cd test ; go test -v -race ./... )
-	( cd plugin ; go test -v -race ./... )
-
