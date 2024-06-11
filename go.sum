@@ -55,6 +55,8 @@ github.com/antonmedv/expr v1.13.0 h1:8YrTtlCzlOtXw+hpeCLDLL2uo0C0k6jmYpYTGws5c5w
 github.com/antonmedv/expr v1.13.0/go.mod h1:FPC8iWArxls7axbVLsW+kpg1mz29A1b2M6jt+hZfDkU=
 github.com/apparentlymart/go-cidr v1.1.0 h1:2mAhrMoF+nhXqxTzSZMUzDHkLjmIHC+Zzn4tdgBZjnU=
 github.com/apparentlymart/go-cidr v1.1.0/go.mod h1:EBcsNrHc3zQeuaeCeCtQruQm+n9/YjEn/vI25Lg7Gwc=
+github.com/arkadeepsen/coredns-ocp-dnsnameresolver v0.0.0-20240607070011-d29acd82108e h1:H7j00822iun/rpM0DEUzl6cGAWJSJjvtB2R59EStVvQ=
+github.com/arkadeepsen/coredns-ocp-dnsnameresolver v0.0.0-20240607070011-d29acd82108e/go.mod h1:iGWBUTo8PxDirnFeigRctVH0/W73riunKDRZnIG8sGo=
 github.com/aws/aws-sdk-go v1.44.322 h1:7JfwifGRGQMHd99PvfXqxBaZsjuRaOF6e3X9zRx2uYo=
 github.com/aws/aws-sdk-go v1.44.322/go.mod h1:aVsgQcEevwlmQ7qHE9I3h+dtQgpqhFB+i8Phjh7fkwI=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
@@ -221,8 +223,6 @@ github.com/openshift/api v0.0.0-20231017161003-8f2e18642ccb h1:ez6Jrs2pSGMdPMR4l
 github.com/openshift/api v0.0.0-20231017161003-8f2e18642ccb/go.mod h1:qNtV0315F+f8ld52TLtPvrfivZpdimOzTi3kn9IVbtU=
 github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6 h1:3wgEtuYbZ76oOXjhSJ2p1m0lftgghK0XlR9guG2aKhA=
 github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6/go.mod h1:Fkn7VRruQ4KwNGeaUmi9QgqLk/d7U6cj+UiP8b+0hiQ=
-github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14 h1:aDYudMP8/wHNGPOUAiMbTvtlJhIDalAvJ7Q6PEt1LQg=
-github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14/go.mod h1:0x4AUO3QDo9jPwY7Gh+nGEFU9q0Xnv5aM0EF40GYBGo=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492 h1:lM6RxxfUMrYL/f8bWEUqdXrANWtrL7Nndbm9iFN0DlU=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/opentracing-go v1.2.0 h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=
