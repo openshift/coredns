@@ -54,6 +54,8 @@ type startupInfo struct {
 	Integrations                map[string]integrationConfig `json:"integrations"`                   // Available tracer integrations
 	PartialFlushEnabled         bool                         `json:"partial_flush_enabled"`          // Whether Partial Flushing is enabled
 	PartialFlushMinSpans        int                          `json:"partial_flush_min_spans"`        // The min number of spans to trigger a partial flush
+	Orchestrion                 orchestrionConfig            `json:"orchestrion"`                    // Orchestrion (auto-instrumentation) configuration.
+	FeatureFlags                []string                     `json:"feature_flags"`
 }
 
 // checkEndpoint tries to connect to the URL specified by endpoint.
@@ -78,8 +80,13 @@ func checkEndpoint(c *http.Client, endpoint string) error {
 // JSON format.
 func logStartup(t *tracer) {
 	tags := make(map[string]string)
-	for k, v := range t.config.globalTags {
+	for k, v := range t.config.globalTags.get() {
 		tags[k] = fmt.Sprintf("%v", v)
+	}
+
+	featureFlags := make([]string, 0, len(t.config.featureFlags))
+	for f := range t.config.featureFlags {
+		featureFlags = append(featureFlags, f)
 	}
 
 	info := startupInfo{
@@ -112,6 +119,8 @@ func logStartup(t *tracer) {
 		AppSec:                      appsec.Enabled(),
 		PartialFlushEnabled:         t.config.partialFlushEnabled,
 		PartialFlushMinSpans:        t.config.partialFlushMinSpans,
+		Orchestrion:                 t.config.orchestrionCfg,
+		FeatureFlags:                featureFlags,
 	}
 	if _, _, err := samplingRulesFromEnv(); err != nil {
 		info.SamplingRulesError = fmt.Sprintf("%s", err)

@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -121,7 +122,7 @@ func newSpanContext(span *span, parent *spanContext) *spanContext {
 			context.setBaggageItem(k, v)
 			return true
 		})
-	} else if sharedinternal.BoolEnv("DD_TRACE_128_BIT_TRACEID_GENERATION_ENABLED", false) {
+	} else if sharedinternal.BoolEnv("DD_TRACE_128_BIT_TRACEID_GENERATION_ENABLED", true) {
 		// add 128 bit trace id, if enabled, formatted as big-endian:
 		// <32-bit unix seconds> <32 bits of zero> <64 random bits>
 		id128 := time.Duration(span.Start) / time.Second
@@ -155,6 +156,9 @@ func (c *spanContext) TraceID() uint64 { return c.traceID.Lower() }
 
 // TraceID128 implements ddtrace.SpanContextW3C.
 func (c *spanContext) TraceID128() string {
+	if c == nil {
+		return ""
+	}
 	return c.traceID.HexEncoded()
 }
 
@@ -181,13 +185,13 @@ func (c *spanContext) setSamplingPriority(p int, sampler samplernames.SamplerNam
 	if c.trace == nil {
 		c.trace = newTrace()
 	}
-	if c.trace.priority != nil && *c.trace.priority != float64(p) {
+	if c.trace.setSamplingPriority(p, sampler) {
+		// the trace's sampling priority was updated: mark this as updated
 		c.updated = true
 	}
-	c.trace.setSamplingPriority(p, sampler)
 }
 
-func (c *spanContext) samplingPriority() (p int, ok bool) {
+func (c *spanContext) SamplingPriority() (p int, ok bool) {
 	if c.trace == nil {
 		return 0, false
 	}
@@ -289,10 +293,11 @@ func (t *trace) samplingPriority() (p int, ok bool) {
 	return t.samplingPriorityLocked()
 }
 
-func (t *trace) setSamplingPriority(p int, sampler samplernames.SamplerName) {
+// setSamplingPriority sets the sampling priority and returns true if it was modified.
+func (t *trace) setSamplingPriority(p int, sampler samplernames.SamplerName) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.setSamplingPriorityLocked(p, sampler)
+	return t.setSamplingPriorityLocked(p, sampler)
 }
 
 func (t *trace) keep() {
@@ -316,10 +321,13 @@ func (t *trace) setTagLocked(key, value string) {
 	t.tags[key] = value
 }
 
-func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerName) {
+func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerName) bool {
 	if t.locked {
-		return
+		return false
 	}
+
+	updatedPriority := t.priority == nil || *t.priority != float64(p)
+
 	if t.priority == nil {
 		t.priority = new(float64)
 	}
@@ -333,6 +341,20 @@ func (t *trace) setSamplingPriorityLocked(p int, sampler samplernames.SamplerNam
 	if p <= 0 && ok {
 		delete(t.propagatingTags, keyDecisionMaker)
 	}
+
+	return updatedPriority
+}
+
+func (t *trace) isLocked() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.locked
+}
+
+func (t *trace) setLocked(locked bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.locked = locked
 }
 
 // push pushes a new span into the trace. If the buffer is full, it returns
@@ -407,6 +429,12 @@ func (t *trace) finishedOne(s *span) {
 		return
 	}
 	setPeerService(s, tr.config)
+
+	// attach the _dd.base_service tag only when the globally configured service name is different from the
+	// span service name.
+	if s.Service != "" && !strings.EqualFold(s.Service, tr.config.serviceName) {
+		s.Meta[keyBaseService] = tr.config.serviceName
+	}
 	if s == t.root && t.priority != nil {
 		// after the root has finished we lock down the priority;
 		// we won't be able to make changes to a span after finishing
