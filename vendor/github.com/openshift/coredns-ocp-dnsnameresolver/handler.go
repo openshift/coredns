@@ -199,14 +199,35 @@ func (resolver *OCPDNSNameResolver) updateResolvedNamesSuccess(
 		go func(namespace string, objName string) {
 			defer wg.Done()
 
+			previousResourceVersion := "0"
 			// Retry the update of the DNSNameResolver object if there's a conflict during the update.
 			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				// Fetch the DNSNameResolver object.
-				resolverObj, err := ocpnetworkv1alpha1lister.NewDNSNameResolverLister(
+				var (
+					resolverObj     *ocpnetworkapiv1alpha1.DNSNameResolver
+					resourceVersion string
+					err             error
+				)
+
+				// Fetch the DNSNameResolver object using the lister first.
+				resolverObj, err = ocpnetworkv1alpha1lister.NewDNSNameResolverLister(
 					resolver.dnsNameResolverInformer.GetIndexer()).DNSNameResolvers(namespace).Get(objName)
 				if err != nil {
 					return err
 				}
+				resourceVersion = resolverObj.GetResourceVersion()
+				// Check if the current and the previous resource version match or not.
+				if resourceVersion == previousResourceVersion {
+					listerResourceVersion := resourceVersion
+					// This indicates that there was a conflict and the lister has not caught up.
+					// So fetch the DNSNameResolver object using the client.
+					resolverObj, err = resolver.ocpNetworkClient.DNSNameResolvers(namespace).Get(ctx, objName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					resourceVersion = resolverObj.GetResourceVersion()
+					log.Infof("lister was stale at resourceVersion=%v, live get showed resourceVersion=%v", listerResourceVersion, resourceVersion)
+				}
+				previousResourceVersion = resourceVersion
 
 				// Make a copy of the object. All the updates will be applied to the copied object.
 				newResolverObj := resolverObj.DeepCopy()
@@ -560,13 +581,34 @@ func (resolver *OCPDNSNameResolver) updateResolvedNamesFailure(ctx context.Conte
 		go func(namespace string, objName string) {
 			defer wg.Done()
 
+			previousResourceVersion := "0"
 			// Retry the update of the DNSNameResolver object if there's a conflict during the update.
 			retryErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				// Fetch the DNSNameResolver object.
-				resolverObj, err := ocpnetworkv1alpha1lister.NewDNSNameResolverLister(resolver.dnsNameResolverInformer.GetIndexer()).DNSNameResolvers(namespace).Get(objName)
+				var (
+					resolverObj     *ocpnetworkapiv1alpha1.DNSNameResolver
+					resourceVersion string
+					err             error
+				)
+				// Fetch the DNSNameResolver object using the lister first.
+				resolverObj, err = ocpnetworkv1alpha1lister.NewDNSNameResolverLister(
+					resolver.dnsNameResolverInformer.GetIndexer()).DNSNameResolvers(namespace).Get(objName)
 				if err != nil {
 					return err
 				}
+				resourceVersion = resolverObj.GetResourceVersion()
+				// Check if the current and the previous resource version match or not.
+				if resourceVersion == previousResourceVersion {
+					listerResourceVersion := resourceVersion
+					// This indicates that there was a conflict and the lister has not caught up.
+					// So fetch the DNSNameResolver object using the client.
+					resolverObj, err = resolver.ocpNetworkClient.DNSNameResolvers(namespace).Get(ctx, objName, metav1.GetOptions{})
+					if err != nil {
+						return err
+					}
+					resourceVersion = resolverObj.GetResourceVersion()
+					log.Infof("lister was stale at resourceVersion=%v, live get showed resourceVersion=%v", listerResourceVersion, resourceVersion)
+				}
+				previousResourceVersion = resourceVersion
 
 				// Make a copy of the object. All the updates will be applied to the copied object.
 				newResolverObj := resolverObj.DeepCopy()
