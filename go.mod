@@ -17,7 +17,7 @@ require (
 	github.com/infobloxopen/go-trees v0.0.0-20200715205103-96a057b8dfb9
 	github.com/matttproud/golang_protobuf_extensions v1.0.4
 	github.com/miekg/dns v1.1.55
-	github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14
+	github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240712094134-af651cec05d1
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.5.0
 	github.com/openzipkin/zipkin-go v0.4.2

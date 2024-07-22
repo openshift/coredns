@@ -13,7 +13,7 @@ test: ## Run go test against code
 
 .PHONY: build-coredns
 build-coredns: ## Build coredns using the local branch of coredns-ocp-dnsnameresolver
-	hack/build-coredns.sh
+	hack/build-coredns.sh $(ARGS)
 
 .PHONY: clean
 clean:
@@ -22,6 +22,7 @@ clean:
 
 CONTAINER_ENGINE ?= podman
 CONTAINER_IMAGE ?= coredns
+DOCKERFILE_PATH ?= Dockerfile
 
 .PHONY: local-image
 local-image:
@@ -29,13 +30,13 @@ ifndef CONTAINER_IMAGE
 	echo "  Please pass a container image ... "
 else ifeq ($(CONTAINER_ENGINE), buildah)
 	echo "  - Building with buildah ... "
-	buildah bud -t $(CONTAINER_IMAGE) .
+	buildah bud -t $(CONTAINER_IMAGE) -f $(DOCKERFILE_PATH) .
 else ifeq ($(CONTAINER_ENGINE), docker)
 	echo "  - Building with docker ... "
-	docker build -t $(CONTAINER_IMAGE) .
+	docker build -t $(CONTAINER_IMAGE) -f $(DOCKERFILE_PATH) .
 else ifeq ($(CONTAINER_ENGINE), podman)
 	echo "  - Building with podman ... "
-	podman build -t $(CONTAINER_IMAGE) .
+	podman build -t $(CONTAINER_IMAGE) -f $(DOCKERFILE_PATH) .
 else
 	echo "  Please pass a container engine ... "
 endif
