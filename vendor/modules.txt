@@ -367,7 +367,7 @@ github.com/openshift/client-go/network/informers/externalversions/network/v1
 github.com/openshift/client-go/network/informers/externalversions/network/v1alpha1
 github.com/openshift/client-go/network/listers/network/v1
 github.com/openshift/client-go/network/listers/network/v1alpha1
-# github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14
+# github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240805163609-83fc794497bc
 ## explicit; go 1.21
 github.com/openshift/coredns-ocp-dnsnameresolver
 # github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492

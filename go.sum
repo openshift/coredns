@@ -221,8 +221,8 @@ github.com/openshift/api v0.0.0-20231017161003-8f2e18642ccb h1:ez6Jrs2pSGMdPMR4l
 github.com/openshift/api v0.0.0-20231017161003-8f2e18642ccb/go.mod h1:qNtV0315F+f8ld52TLtPvrfivZpdimOzTi3kn9IVbtU=
 github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6 h1:3wgEtuYbZ76oOXjhSJ2p1m0lftgghK0XlR9guG2aKhA=
 github.com/openshift/client-go v0.0.0-20231018150822-6e226e2825a6/go.mod h1:Fkn7VRruQ4KwNGeaUmi9QgqLk/d7U6cj+UiP8b+0hiQ=
-github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14 h1:aDYudMP8/wHNGPOUAiMbTvtlJhIDalAvJ7Q6PEt1LQg=
-github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240326070009-fc0f61729b14/go.mod h1:0x4AUO3QDo9jPwY7Gh+nGEFU9q0Xnv5aM0EF40GYBGo=
+github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240805163609-83fc794497bc h1:6Y2w4D8A8dtQ06+oWnDpdWep1kmyMH4nrxXVaVoyVww=
+github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20240805163609-83fc794497bc/go.mod h1:0x4AUO3QDo9jPwY7Gh+nGEFU9q0Xnv5aM0EF40GYBGo=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492 h1:lM6RxxfUMrYL/f8bWEUqdXrANWtrL7Nndbm9iFN0DlU=
 github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492/go.mod h1:Ngi6UdF0k5OKD5t5wlmGhe/EDKPoUM3BXZSSfIuJbis=
 github.com/opentracing/opentracing-go v1.2.0 h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=
