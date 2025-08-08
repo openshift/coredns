@@ -6,6 +6,7 @@ approvers:
   - rfredette
   - alebedev87
   - gcs278
+  - rikatz
 
 component: DNS
 
