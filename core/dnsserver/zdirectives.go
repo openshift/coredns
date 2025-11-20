@@ -44,6 +44,7 @@ var Directives = []string{
 	"rewrite",
 	"autopath",
 	"acl",
+	"ocp_dnsnameresolver",
 	"cache",
 	"header",
 	"dnssec",

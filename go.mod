@@ -25,6 +25,7 @@ require (
 	github.com/hashicorp/nomad/api v0.0.0-20250909143645-a3b86c697f38 // v1.10.5
 	github.com/infobloxopen/go-trees v0.0.0-20200715205103-96a057b8dfb9
 	github.com/miekg/dns v1.1.72
+	github.com/openshift/coredns-ocp-dnsnameresolver v0.0.0-20251118200623-f7b15b30153f
 	github.com/opentracing/opentracing-go v1.2.0
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.5.0
 	github.com/openzipkin/zipkin-go v0.4.3
@@ -161,6 +162,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
+	github.com/openshift/api v0.0.0-20251111193948-50e2ece149d7 // indirect
+	github.com/openshift/client-go v0.0.0-20251015124057-db0dee36e235 // indirect
 	github.com/opentracing-contrib/go-observer v0.0.0-20170622124052-a52f23424492 // indirect
 	github.com/oschwald/maxminddb-golang/v2 v2.3.0 // indirect
 	github.com/outcaste-io/ristretto v0.2.3 // indirect
