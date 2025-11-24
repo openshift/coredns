@@ -44,3 +44,14 @@ pb:
 clean:
 	go clean
 	rm -f coredns
+
+.PHONY: dep-ensure
+dep-ensure:
+	dep version || go get -u github.com/golang/dep/cmd/dep
+	dep ensure -v
+	dep prune -v
+	find vendor -name '*_test.go' -delete
+
+.PHONY: test
+test: check
+	GOFLAGS=-mod=vendor go test -count=1 ./...
