@@ -1,0 +1,19 @@
+diff --git a/.gitignore b/.gitignore
+index 5a6dd1245..bd3896f72 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,7 +1,7 @@
+-# only add build artifacts concerning coredns - no editor related files
+-coredns
+-coredns.exe
+-Corefile
+-build/
+-release/
+-vendor/
++query.log
++Corefile
++*.swp
++/coredns
++coredns.exe
++/build/
++release/
