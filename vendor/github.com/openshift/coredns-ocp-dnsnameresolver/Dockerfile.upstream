@@ -1,0 +1,10 @@
+FROM golang:1.24 as builder
+WORKDIR /go/src/github.com/coredns/coredns-ocp-dnsnameresolver
+COPY . .
+
+RUN make build-coredns ARGS="upstream"
+
+FROM gcr.io/distroless/base-debian12:latest
+COPY --from=builder /go/src/github.com/coredns/coredns-ocp-dnsnameresolver/coredns /usr/bin/
+
+ENTRYPOINT ["/usr/bin/coredns"]
