@@ -1,14 +1,19 @@
 package forward
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
+	"github.com/coredns/coredns/plugin/pkg/dnstest"
 	"github.com/coredns/coredns/plugin/pkg/proxy"
+	"github.com/coredns/coredns/plugin/test"
 
 	"github.com/miekg/dns"
 )
@@ -108,7 +113,6 @@ func TestSetupTLS(t *testing.T) {
 	for i, test := range tests {
 		c := caddy.NewTestController("dns", test.input)
 		fs, err := parseForward(c)
-		f := fs[0]
 
 		if test.shouldErr && err == nil {
 			t.Errorf("Test %d: expected error but found %s for input %s", i, err, test.input)
@@ -123,6 +127,8 @@ func TestSetupTLS(t *testing.T) {
 				t.Errorf("Test %d: expected error to contain: %v, found error: %v, input: %s", i, test.expectedErr, err, test.input)
 			}
 		}
+
+		f := fs[0]
 
 		if !test.shouldErr && test.expectedServerName != "" && test.expectedServerName != f.tlsConfig.ServerName {
 			t.Errorf("Test %d: expected: %q, actual: %q", i, test.expectedServerName, f.tlsConfig.ServerName)
@@ -310,7 +316,7 @@ func TestMultiForward(t *testing.T) {
 	handlers := dnsserver.GetConfig(c).Handlers()
 	f1, ok := handlers[0].(*Forward)
 	if !ok {
-		t.Fatalf("expected first plugin to be Forward, got %v", reflect.TypeOf(f1.Next))
+		t.Fatalf("expected first plugin to be Forward, got %v", reflect.TypeOf(handlers[0]))
 	}
 
 	if f1.from != "1st.example.org." {
@@ -340,5 +346,160 @@ func TestMultiForward(t *testing.T) {
 	}
 	if f3.Next != nil {
 		t.Error("expected third plugin to be last, but Next is not nil")
+	}
+}
+func TestNextAlternate(t *testing.T) {
+	testsValid := []struct {
+		input    string
+		expected []int
+	}{
+		{"forward . 127.0.0.1 {\nnext NXDOMAIN\n}\n", []int{dns.RcodeNameError}},
+		{"forward . 127.0.0.1 {\nnext SERVFAIL\n}\n", []int{dns.RcodeServerFailure}},
+		{"forward . 127.0.0.1 {\nnext NXDOMAIN SERVFAIL\n}\n", []int{dns.RcodeNameError, dns.RcodeServerFailure}},
+		{"forward . 127.0.0.1 {\nnext NXDOMAIN SERVFAIL REFUSED\n}\n", []int{dns.RcodeNameError, dns.RcodeServerFailure, dns.RcodeRefused}},
+	}
+	for i, test := range testsValid {
+		c := caddy.NewTestController("dns", test.input)
+		f, err := parseForward(c)
+		forward := f[0]
+		if err != nil {
+			t.Errorf("Test %d: %v", i, err)
+		}
+		if len(forward.nextAlternateRcodes) != len(test.expected) {
+			t.Errorf("Test %d: expected %d next rcodes, got %d", i, len(test.expected), len(forward.nextAlternateRcodes))
+		}
+		for j, rcode := range forward.nextAlternateRcodes {
+			if rcode != test.expected[j] {
+				t.Errorf("Test %d: expected next rcode %d, got %d", i, test.expected[j], rcode)
+			}
+		}
+	}
+
+	testsInvalid := []string{
+		"forward . 127.0.0.1 {\nnext\n}\n",
+		"forward . 127.0.0.1 {\nnext INVALID\n}\n",
+		"forward . 127.0.0.1 {\nnext NXDOMAIN INVALID\n}\n",
+	}
+	for i, test := range testsInvalid {
+		c := caddy.NewTestController("dns", test)
+		_, err := parseForward(c)
+		if err == nil {
+			t.Errorf("Test %d: expected error, got nil", i)
+		}
+	}
+}
+
+func TestFailfastAllUnhealthyUpstreams(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedRecVal bool
+		expectedErr    string
+	}{
+		// positive
+		{"forward . 127.0.0.1\n", false, ""},
+		{"forward . 127.0.0.1 {\nfailfast_all_unhealthy_upstreams\n}\n", true, ""},
+		// negative
+		{"forward . 127.0.0.1 {\nfailfast_all_unhealthy_upstreams false\n}\n", false, "Wrong argument count"},
+	}
+
+	for i, test := range tests {
+		c := caddy.NewTestController("dns", test.input)
+		fs, err := parseForward(c)
+
+		if err != nil {
+			if test.expectedErr == "" {
+				t.Errorf("Test %d: expected no error but found one for input %s, got: %v", i, test.input, err)
+			}
+			if !strings.Contains(err.Error(), test.expectedErr) {
+				t.Errorf("Test %d: expected error to contain: %v, found error: %v, input: %s", i, test.expectedErr, err, test.input)
+			}
+		} else {
+			if test.expectedErr != "" {
+				t.Errorf("Test %d: expected error but found no error for input %s", i, test.input)
+			}
+		}
+
+		if test.expectedErr != "" {
+			continue
+		}
+
+		f := fs[0]
+		if f.failfastUnhealthyUpstreams != test.expectedRecVal {
+			t.Errorf("Test %d: Expected Rec:%v, got:%v", i, test.expectedRecVal, f.failfastUnhealthyUpstreams)
+		}
+	}
+}
+
+func TestFailover(t *testing.T) {
+	server_fail_s := dnstest.NewMultipleServer(func(w dns.ResponseWriter, r *dns.Msg) {
+		ret := new(dns.Msg)
+		ret.SetRcode(r, dns.RcodeServerFailure)
+		w.WriteMsg(ret)
+	})
+	defer server_fail_s.Close()
+
+	server_refused_s := dnstest.NewMultipleServer(func(w dns.ResponseWriter, r *dns.Msg) {
+		ret := new(dns.Msg)
+		ret.SetRcode(r, dns.RcodeRefused)
+		w.WriteMsg(ret)
+	})
+	defer server_refused_s.Close()
+
+	s := dnstest.NewMultipleServer(func(w dns.ResponseWriter, r *dns.Msg) {
+		ret := new(dns.Msg)
+		ret.SetReply(r)
+		ret.Answer = append(ret.Answer, test.A("example.org. IN A 127.0.0.1"))
+		w.WriteMsg(ret)
+	})
+	defer s.Close()
+
+	tests := []struct {
+		input     string
+		hasRecord bool
+		failMsg   string
+	}{
+		{fmt.Sprintf(
+			`forward . %s %s %s {
+				policy sequential
+				failover ServFail Refused
+				}`, server_fail_s.Addr, server_refused_s.Addr, s.Addr), true, "If failover is set, records should be returned as long as one of the upstreams is work"},
+		{fmt.Sprintf(
+			`forward . %s %s %s {
+				policy sequential
+				}`, server_fail_s.Addr, server_refused_s.Addr, s.Addr), false, "If failover is not set and the first upstream is not work, no records should be returned"},
+		{fmt.Sprintf(
+			`forward . %s %s %s {
+				policy sequential
+				}`, s.Addr, server_fail_s.Addr, server_refused_s.Addr), true, "Although failover is not set, as long as the first upstream is work, there should be has a record return"},
+	}
+
+	for _, testCase := range tests {
+		c := caddy.NewTestController("dns", testCase.input)
+		fs, err := parseForward(c)
+
+		f := fs[0]
+		if err != nil {
+			t.Errorf("Failed to create forwarder: %s", err)
+		}
+		f.OnStartup()
+		defer f.OnShutdown()
+
+		// Reduce per-upstream read timeout to make the test fit within the
+		// per-query deadline defaultTimeout of 5 seconds.
+		for _, p := range f.proxies {
+			p.SetReadTimeout(500 * time.Millisecond)
+		}
+
+		m := new(dns.Msg)
+		m.SetQuestion("example.org.", dns.TypeA)
+		rec := dnstest.NewRecorder(&test.ResponseWriter{})
+
+		if _, err := f.ServeDNS(context.TODO(), rec, m); err != nil {
+			t.Fatal("Expected to receive reply, but didn't")
+		}
+
+		if (len(rec.Msg.Answer) > 0) != testCase.hasRecord {
+			t.Errorf(" %s: \n %s", testCase.failMsg, testCase.input)
+		}
 	}
 }

@@ -21,21 +21,25 @@ import (
 )
 
 const (
-	priority    = 10  // default priority when nothing is set
-	ttl         = 300 // default ttl when nothing is set
-	etcdTimeout = 5 * time.Second
+	defaultPriority    = 10    // default priority when nothing is set
+	defaultTTL         = 300   // default ttl when nothing is set
+	defaultLeaseMinTTL = 30    // default minimum TTL for lease-based records
+	defaultLeaseMaxTTL = 86400 // default maximum TTL for lease-based records
+	etcdTimeout        = 5 * time.Second
 )
 
 var errKeyNotFound = errors.New("key not found")
 
 // Etcd is a plugin talks to an etcd cluster.
 type Etcd struct {
-	Next       plugin.Handler
-	Fall       fall.F
-	Zones      []string
-	PathPrefix string
-	Upstream   *upstream.Upstream
-	Client     *etcdcv3.Client
+	Next        plugin.Handler
+	Fall        fall.F
+	Zones       []string
+	PathPrefix  string
+	Upstream    *upstream.Upstream
+	Client      *etcdcv3.Client
+	MinLeaseTTL uint32 // minimum TTL for lease-based records
+	MaxLeaseTTL uint32 // maximum TTL for lease-based records
 
 	endpoints []string // Stored here as well, to aid in testing.
 }
@@ -146,7 +150,7 @@ Nodes:
 
 		serv.TTL = e.TTL(n, serv)
 		if serv.Priority == 0 {
-			serv.Priority = priority
+			serv.Priority = defaultPriority
 		}
 
 		if shouldInclude(serv, qType) {
@@ -159,10 +163,39 @@ Nodes:
 // TTL returns the smaller of the etcd TTL and the service's
 // TTL. If neither of these are set (have a zero value), a default is used.
 func (e *Etcd) TTL(kv *mvccpb.KeyValue, serv *msg.Service) uint32 {
-	etcdTTL := uint32(kv.Lease)
+	var etcdTTL uint32
+
+	// Get actual lease TTL from etcd if lease exists and client is available
+	if kv.Lease != 0 && e.Client != nil {
+		if resp, err := e.Client.TimeToLive(context.Background(), etcdcv3.LeaseID(kv.Lease)); err == nil && resp.TTL > 0 {
+			leaseTTL := resp.TTL
+
+			// Get bounds with defaults
+			minTTL := e.MinLeaseTTL
+			if minTTL == 0 {
+				minTTL = defaultLeaseMinTTL
+			}
+			maxTTL := e.MaxLeaseTTL
+			if maxTTL == 0 {
+				maxTTL = defaultLeaseMaxTTL
+			}
+
+			// Clamp lease TTL to configured bounds
+			minTTL64 := int64(minTTL)
+			maxTTL64 := int64(maxTTL)
+
+			if leaseTTL < minTTL64 {
+				leaseTTL = minTTL64
+			} else if leaseTTL > maxTTL64 {
+				leaseTTL = maxTTL64
+			}
+
+			etcdTTL = uint32(leaseTTL)
+		}
+	}
 
 	if etcdTTL == 0 && serv.TTL == 0 {
-		return ttl
+		return defaultTTL
 	}
 	if etcdTTL == 0 {
 		return serv.TTL
@@ -182,4 +215,12 @@ func (e *Etcd) TTL(kv *mvccpb.KeyValue, serv *msg.Service) uint32 {
 // value while the TXT field will be empty.
 func shouldInclude(serv *msg.Service, qType uint16) bool {
 	return (qType == dns.TypeTXT && serv.Text != "") || serv.Host != ""
+}
+
+// OnShutdown shuts down etcd client when caddy instance restart
+func (e *Etcd) OnShutdown() error {
+	if e.Client != nil {
+		e.Client.Close()
+	}
+	return nil
 }

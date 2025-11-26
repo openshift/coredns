@@ -192,7 +192,7 @@ func countRecords(result []dns.RR) (cname int, address int, mx int, sorted bool)
 			state = Any
 		}
 	}
-	return
+	return cname, address, mx, sorted
 }
 
 func handler() plugin.Handler {

@@ -10,7 +10,7 @@ CGO_ENABLED?=0
 GOLANG_VERSION ?= $(shell cat .go-version)
 
 export GOSUMDB = sum.golang.org
-export GOTOOLCHAIN = go$(GOLANG_VERSION)
+export GOTOOLCHAIN = local
 
 .PHONY: all
 all: coredns
@@ -49,9 +49,4 @@ dep-ensure:
 
 .PHONY: test
 test: check
-	( cd request ; go test -v -race ./... )
-	( cd core ; go test -v -race  ./... )
-	( cd coremain ; go test -v -race ./... )
-	( cd test ; go test -v -race ./... )
-	( cd plugin ; go test -v -race ./... )
-
+	GOFLAGS=-mod=vendor go test -count=1 ./...

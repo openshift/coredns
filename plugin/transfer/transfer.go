@@ -134,6 +134,11 @@ func (t *Transfer) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 			select {
 			case ch <- &dns.Envelope{RR: rrs}:
 			case err := <-errCh:
+				// Client errored; drain pchan to avoid blocking the producer goroutine.
+				go func() {
+					for range pchan {
+					}
+				}()
 				return dns.RcodeServerFailure, err
 			}
 			l += len(rrs)
@@ -161,11 +166,7 @@ func (t *Transfer) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Ms
 	}
 
 	if len(rrs) > 0 {
-		select {
-		case ch <- &dns.Envelope{RR: rrs}:
-		case err := <-errCh:
-			return dns.RcodeServerFailure, err
-		}
+		ch <- &dns.Envelope{RR: rrs}
 		l += len(rrs)
 	}
 

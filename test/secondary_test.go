@@ -72,7 +72,7 @@ func TestSecondaryZoneTransfer(t *testing.T) {
 
 	var r *dns.Msg
 	// This is now async; we need to wait for it to be transferred.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		r, _ = dns.Exchange(m, udp)
 		if len(r.Answer) != 0 {
 			break
@@ -114,7 +114,7 @@ func TestIxfrResponse(t *testing.T) {
 	c := new(dns.Client)
 	c.Net = "tcp"
 	// This is now async; we need to wait for it to be transferred.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		r, _, _ = c.Exchange(m, tcp)
 		if len(r.Answer) != 0 {
 			break

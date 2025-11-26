@@ -42,6 +42,8 @@ kubernetes [ZONES...] {
     noendpoints
     fallthrough [ZONES...]
     ignore empty_service
+    multicluster [ZONES...]
+    startup_timeout DURATION
 }
 ```
 
@@ -101,6 +103,12 @@ kubernetes [ZONES...] {
 * `ignore empty_service` returns NXDOMAIN for services without any ready endpoint addresses (e.g., ready pods).
   This allows the querying pod to continue searching for the service in the search path.
   The search path could, for example, include another Kubernetes cluster.
+* `multicluster` defines the multicluster zones as defined by Multi-Cluster
+  Services API (MCS-API). Specifying this option is generally paired with the
+  installation of an MCS-API implementation and the ServiceImport and ServiceExport
+  CRDs. The plugin MUST be authoritative for the zones listed here.
+* `startup_timeout` specifies the **DURATION** value that limits the time to wait for informer cache synced
+  when the kubernetes plugin starts. If not specified, the default timeout will be 5s.
 
 Enabling zone transfer is done by using the *transfer* plugin.
 
@@ -110,7 +118,7 @@ When CoreDNS starts with the *kubernetes* plugin enabled, it will delay serving 
 until it can connect to the Kubernetes API and synchronize all object watches.  If this cannot happen within
 5 seconds, then CoreDNS will start serving DNS while the *kubernetes* plugin continues to try to connect
 and synchronize all object watches.  CoreDNS will answer SERVFAIL to any request made for a Kubernetes record
-that has not yet been synchronized.
+that has not yet been synchronized. You can also determine how long to wait by specifying `startup_timeout`.
 
 ## Monitoring Kubernetes Endpoints
 
@@ -120,6 +128,11 @@ The *kubernetes* plugin watches Endpoints via the `discovery.EndpointSlices` API
 
 This plugin reports readiness to the ready plugin. This will happen after it has synced to the
 Kubernetes API.
+
+## PTR Records
+
+This plugin creates PTR records for every Pod selected by a Service. If a given Pod is selected by more than
+one Service a separate PTR record will exist for each Service selecting it.
 
 ## Examples
 
@@ -149,6 +162,14 @@ Connect to Kubernetes with CoreDNS running outside the cluster:
 kubernetes cluster.local {
     endpoint https://k8s-endpoint:8443
     tls cert key cacert
+}
+~~~
+
+Configure multicluster
+
+~~~ txt
+kubernetes cluster.local clusterset.local {
+    multicluster clusterset.local
 }
 ~~~
 

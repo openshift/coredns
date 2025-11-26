@@ -1,10 +1,10 @@
-FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.22-openshift-4.17 as builder
+FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.24-openshift-4.21 as builder
 WORKDIR /go/src/github.com/openshift/coredns-ocp-dnsnameresolver
 COPY . .
 
 RUN make build-coredns
 
-FROM registry.ci.openshift.org/ocp/4.17:base
+FROM registry.ci.openshift.org/ocp/4.21:base
 COPY --from=builder /go/src/github.com/openshift/coredns-ocp-dnsnameresolver/coredns /usr/bin/
 
 ENTRYPOINT ["/usr/bin/coredns"]

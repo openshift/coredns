@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -45,6 +46,12 @@ PrivateKey: f03VplaIEA+KHI9uizlemUSbUJH86hPBPjmcUninPoM=
 // While we're at it - we also check the README.md itself. It should at least have the sections:
 // Name, Description, Syntax and Examples. See plugin.md for more details.
 func TestReadme(t *testing.T) {
+	// Skip on non-Linux systems as some tests refer to for e.g. loopback interfaces which
+	// are not present on all systems.
+	if runtime.GOOS != "linux" {
+		t.Skipf("Skipping readme test on %s", runtime.GOOS)
+	}
+
 	port := 30053
 	caddy.Quiet = true
 	dnsserver.Quiet = true
@@ -166,7 +173,7 @@ func sectionsFromReadme(readme string) error {
 		}
 	}
 	if section != 4 {
-		return fmt.Errorf("Sections incomplete or ordered wrong: %q, want (at least): Name, Descripion, Syntax and Examples", readme)
+		return fmt.Errorf("Sections incomplete or ordered wrong: %q, want (at least): Name, Description, Syntax and Examples", readme)
 	}
 	return nil
 }

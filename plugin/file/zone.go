@@ -73,21 +73,24 @@ func (z *Zone) CopyWithoutApex() *Zone {
 
 // Insert inserts r into z.
 func (z *Zone) Insert(r dns.RR) error {
-	r.Header().Name = strings.ToLower(r.Header().Name)
+	// r.Header().Name = strings.ToLower(r.Header().Name)
+	if r.Header().Rrtype != dns.TypeSRV {
+		r.Header().Name = strings.ToLower(r.Header().Name)
+	}
 
 	switch h := r.Header().Rrtype; h {
 	case dns.TypeNS:
 		r.(*dns.NS).Ns = strings.ToLower(r.(*dns.NS).Ns)
 
 		if r.Header().Name == z.origin {
-			z.Apex.NS = append(z.Apex.NS, r)
+			z.NS = append(z.NS, r)
 			return nil
 		}
 	case dns.TypeSOA:
 		r.(*dns.SOA).Ns = strings.ToLower(r.(*dns.SOA).Ns)
 		r.(*dns.SOA).Mbox = strings.ToLower(r.(*dns.SOA).Mbox)
 
-		z.Apex.SOA = r.(*dns.SOA)
+		z.SOA = r.(*dns.SOA)
 		return nil
 	case dns.TypeNSEC3, dns.TypeNSEC3PARAM:
 		return fmt.Errorf("NSEC3 zone is not supported, dropping RR: %s for zone: %s", r.Header().Name, z.origin)
@@ -95,11 +98,11 @@ func (z *Zone) Insert(r dns.RR) error {
 		x := r.(*dns.RRSIG)
 		switch x.TypeCovered {
 		case dns.TypeSOA:
-			z.Apex.SIGSOA = append(z.Apex.SIGSOA, x)
+			z.SIGSOA = append(z.SIGSOA, x)
 			return nil
 		case dns.TypeNS:
 			if r.Header().Name == z.origin {
-				z.Apex.SIGNS = append(z.Apex.SIGNS, x)
+				z.SIGNS = append(z.SIGNS, x)
 				return nil
 			}
 		}
@@ -108,7 +111,7 @@ func (z *Zone) Insert(r dns.RR) error {
 	case dns.TypeMX:
 		r.(*dns.MX).Mx = strings.ToLower(r.(*dns.MX).Mx)
 	case dns.TypeSRV:
-		r.(*dns.SRV).Target = strings.ToLower(r.(*dns.SRV).Target)
+		// r.(*dns.SRV).Target = strings.ToLower(r.(*dns.SRV).Target)
 	}
 
 	z.Tree.Insert(r)
@@ -133,20 +136,20 @@ func (z *Zone) SetFile(path string) {
 func (z *Zone) ApexIfDefined() ([]dns.RR, error) {
 	z.RLock()
 	defer z.RUnlock()
-	if z.Apex.SOA == nil {
+	if z.SOA == nil {
 		return nil, fmt.Errorf("no SOA")
 	}
 
-	rrs := []dns.RR{z.Apex.SOA}
+	rrs := []dns.RR{z.SOA}
 
-	if len(z.Apex.SIGSOA) > 0 {
-		rrs = append(rrs, z.Apex.SIGSOA...)
+	if len(z.SIGSOA) > 0 {
+		rrs = append(rrs, z.SIGSOA...)
 	}
-	if len(z.Apex.NS) > 0 {
-		rrs = append(rrs, z.Apex.NS...)
+	if len(z.NS) > 0 {
+		rrs = append(rrs, z.NS...)
 	}
-	if len(z.Apex.SIGNS) > 0 {
-		rrs = append(rrs, z.Apex.SIGNS...)
+	if len(z.SIGNS) > 0 {
+		rrs = append(rrs, z.SIGNS...)
 	}
 
 	return rrs, nil

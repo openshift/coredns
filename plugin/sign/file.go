@@ -29,19 +29,19 @@ func (s *Signer) write(z *file.Zone) error {
 }
 
 func write(w io.Writer, z *file.Zone) error {
-	if _, err := io.WriteString(w, z.Apex.SOA.String()); err != nil {
+	if _, err := io.WriteString(w, z.SOA.String()); err != nil {
 		return err
 	}
 	w.Write([]byte("\n")) // RR Stringer() method doesn't include newline, which ends the RR in a zone file, write that here.
-	for _, rr := range z.Apex.SIGSOA {
+	for _, rr := range z.SIGSOA {
 		io.WriteString(w, rr.String())
 		w.Write([]byte("\n"))
 	}
-	for _, rr := range z.Apex.NS {
+	for _, rr := range z.NS {
 		io.WriteString(w, rr.String())
 		w.Write([]byte("\n"))
 	}
-	for _, rr := range z.Apex.SIGNS {
+	for _, rr := range z.SIGNS {
 		io.WriteString(w, rr.String())
 		w.Write([]byte("\n"))
 	}
@@ -66,10 +66,6 @@ func Parse(f io.Reader, origin, fileName string) (*file.Zone, error) {
 	seenSOA := false
 
 	for rr, ok := zp.Next(); ok; rr, ok = zp.Next() {
-		if err := zp.Err(); err != nil {
-			return nil, err
-		}
-
 		switch rr.(type) {
 		case *dns.DNSKEY, *dns.RRSIG, *dns.CDNSKEY, *dns.CDS:
 			continue
@@ -86,6 +82,10 @@ func Parse(f io.Reader, origin, fileName string) (*file.Zone, error) {
 	}
 	if !seenSOA {
 		return nil, fmt.Errorf("file %q has no SOA record", fileName)
+	}
+
+	if err := zp.Err(); err != nil {
+		return nil, err
 	}
 
 	return z, nil

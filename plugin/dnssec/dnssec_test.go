@@ -248,6 +248,7 @@ func testEmptyMsg() *dns.Msg {
 }
 
 func newDnssec(t *testing.T, zones []string) (Dnssec, func(), func()) {
+	t.Helper()
 	k, rm1, rm2 := newKey(t)
 	c := cache.New(defaultCap)
 	d := New(zones, []*DNSKEY{k}, false, nil, c)
@@ -255,6 +256,7 @@ func newDnssec(t *testing.T, zones []string) (Dnssec, func(), func()) {
 }
 
 func newKey(t *testing.T) (*DNSKEY, func(), func()) {
+	t.Helper()
 	fPriv, rmPriv, _ := test.TempFile(".", privKey)
 	fPub, rmPub, _ := test.TempFile(".", pubKey)
 

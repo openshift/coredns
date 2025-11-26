@@ -71,6 +71,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func testMetadata(t *testing.T, state request.Request, geoIP *GeoIP, label, expectedValue string) {
+	t.Helper()
 	ctx := metadata.ContextWithMetadata(context.Background())
 	rCtx := geoIP.Metadata(ctx, state)
 	if fmt.Sprintf("%p", ctx) != fmt.Sprintf("%p", rCtx) {

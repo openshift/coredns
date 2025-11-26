@@ -120,6 +120,7 @@ func TestLookupStaticHost(t *testing.T) {
 }
 
 func testStaticHost(t *testing.T, ent staticHostEntry, h *Hostsfile) {
+	t.Helper()
 	ins := []string{ent.in, plugin.Name(ent.in).Normalize(), strings.ToLower(ent.in), strings.ToUpper(ent.in)}
 	for k, in := range ins {
 		addrsV4 := h.LookupStaticHostV4(in)
@@ -206,6 +207,7 @@ func TestLookupStaticAddr(t *testing.T) {
 }
 
 func testStaticAddr(t *testing.T, ent staticIPEntry, h *Hostsfile) {
+	t.Helper()
 	hosts := h.LookupStaticAddr(ent.in)
 	for i := range ent.out {
 		ent.out[i] = plugin.Name(ent.out[i]).Normalize()

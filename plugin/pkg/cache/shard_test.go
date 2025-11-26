@@ -26,11 +26,11 @@ func TestAddEvict(t *testing.T) {
 	const size = 1024
 	s := newShard(size)
 
-	for i := uint64(0); i < size; i++ {
-		s.Add(i, 1)
+	for i := range size {
+		s.Add(uint64(i), 1)
 	}
-	for i := uint64(0); i < size; i++ {
-		s.Add(i, 1)
+	for i := range size {
+		s.Add(uint64(i), 1)
 		if s.Len() != size {
 			t.Fatal("A item was unnecessarily evicted from the cache")
 		}
@@ -86,7 +86,7 @@ func TestShardLenEvict(t *testing.T) {
 
 	// Make sure we don't accidentally evict an element when
 	// we the key is already stored.
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		s.Add(5, 1)
 		if l := s.Len(); l != 4 {
 			t.Fatalf("Shard size should %d, got %d", 4, l)
@@ -96,12 +96,12 @@ func TestShardLenEvict(t *testing.T) {
 
 func TestShardEvictParallel(t *testing.T) {
 	s := newShard(shardSize)
-	for i := uint64(0); i < shardSize; i++ {
-		s.Add(i, struct{}{})
+	for i := range shardSize {
+		s.Add(uint64(i), struct{}{})
 	}
 	start := make(chan struct{})
 	var wg sync.WaitGroup
-	for i := 0; i < shardSize; i++ {
+	for range shardSize {
 		wg.Add(1)
 		go func() {
 			<-start
@@ -119,7 +119,7 @@ func TestShardEvictParallel(t *testing.T) {
 func BenchmarkShard(b *testing.B) {
 	s := newShard(shardSize)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		k := uint64(i) % shardSize * 2
 		s.Add(k, 1)
 		s.Get(k)

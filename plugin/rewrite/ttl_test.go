@@ -99,10 +99,11 @@ func TestTtlRewrite(t *testing.T) {
 		}
 		rules = append(rules, rule)
 	}
-	doTTLTests(rules, t)
+	doTTLTests(t, rules)
 }
 
-func doTTLTests(rules []Rule, t *testing.T) {
+func doTTLTests(t *testing.T, rules []Rule) {
+	t.Helper()
 	tests := []struct {
 		from      string
 		fromType  uint16

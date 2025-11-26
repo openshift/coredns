@@ -18,6 +18,7 @@ var (
 )
 
 func accept(t *testing.T, l net.Listener, count int) {
+	t.Helper()
 	server, err := l.Accept()
 	if err != nil {
 		t.Fatalf("Server accepted: %s", err)
@@ -30,7 +31,7 @@ func accept(t *testing.T, l net.Listener, count int) {
 		t.Fatalf("Server decoder: %s", err)
 	}
 
-	for i := 0; i < count; i++ {
+	for range count {
 		if _, err := dec.Decode(); err != nil {
 			t.Errorf("Server decode: %s", err)
 		}
@@ -60,7 +61,7 @@ func TestTransport(t *testing.T) {
 			wg.Done()
 		}()
 
-		dio := newIO(param[0], l.Addr().String())
+		dio := newIO(param[0], l.Addr().String(), 1, 1)
 		dio.tcpTimeout = 10 * time.Millisecond
 		dio.flushTimeout = 30 * time.Millisecond
 		dio.connect()
@@ -89,14 +90,14 @@ func TestRace(t *testing.T) {
 		wg.Done()
 	}()
 
-	dio := newIO("tcp", l.Addr().String())
+	dio := newIO("tcp", l.Addr().String(), 1, 1)
 	dio.tcpTimeout = 10 * time.Millisecond
 	dio.flushTimeout = 30 * time.Millisecond
 	dio.connect()
 	defer dio.close()
 
 	wg.Add(count)
-	for i := 0; i < count; i++ {
+	for range count {
 		go func() {
 			tmsg := tap.Dnstap_MESSAGE
 			dio.Dnstap(&tap.Dnstap{Type: &tmsg})
@@ -122,7 +123,7 @@ func TestReconnect(t *testing.T) {
 	}()
 
 	addr := l.Addr().String()
-	dio := newIO("tcp", addr)
+	dio := newIO("tcp", addr, 1, 1)
 	dio.tcpTimeout = 10 * time.Millisecond
 	dio.flushTimeout = 30 * time.Millisecond
 	dio.connect()
@@ -147,7 +148,7 @@ func TestReconnect(t *testing.T) {
 		wg.Done()
 	}()
 
-	for i := 0; i < count; i++ {
+	for range count {
 		time.Sleep(100 * time.Millisecond)
 		dio.Dnstap(&tmsg)
 	}

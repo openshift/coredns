@@ -21,7 +21,7 @@ func TestReplacer(t *testing.T) {
 	w := dnstest.NewRecorder(&test.ResponseWriter{})
 	r := new(dns.Msg)
 	r.SetQuestion("example.org.", dns.TypeHINFO)
-	r.MsgHdr.AuthenticatedData = true
+	r.AuthenticatedData = true
 	state := request.Request{W: w, Req: r}
 
 	replacer := New()
@@ -269,14 +269,13 @@ func BenchmarkReplacer(b *testing.B) {
 	w := dnstest.NewRecorder(&test.ResponseWriter{})
 	r := new(dns.Msg)
 	r.SetQuestion("example.org.", dns.TypeHINFO)
-	r.MsgHdr.AuthenticatedData = true
+	r.AuthenticatedData = true
 	state := request.Request{W: w, Req: r}
 
-	b.ResetTimer()
 	b.ReportAllocs()
 
 	replacer := New()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		replacer.Replace(context.TODO(), state, nil, "{type} {name} {size}")
 	}
 }
@@ -288,22 +287,21 @@ func BenchmarkReplacer_CommonLogFormat(b *testing.B) {
 	r.Id = 1053
 	r.AuthenticatedData = true
 	r.CheckingDisabled = true
-	r.MsgHdr.AuthenticatedData = true
+	r.AuthenticatedData = true
 	w.WriteMsg(r)
 	state := request.Request{W: w, Req: r}
 
 	replacer := New()
 	ctxt := context.TODO()
 
-	b.ResetTimer()
 	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		replacer.Replace(ctxt, state, w, CommonLogFormat)
 	}
 }
 
 func BenchmarkParseFormat(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		parseFormat(CommonLogFormat)
 	}
 }

@@ -39,10 +39,11 @@ func (t *Transfer) Notify(zone string) error {
 
 func sendNotify(c *dns.Client, m *dns.Msg, s string) error {
 	var err error
+	var ret *dns.Msg
 
 	code := dns.RcodeServerFailure
-	for i := 0; i < 3; i++ {
-		ret, _, err := c.Exchange(m, s)
+	for range 3 {
+		ret, _, err = c.Exchange(m, s)
 		if err != nil {
 			continue
 		}

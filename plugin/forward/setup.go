@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/coredns/caddy"
@@ -175,7 +176,7 @@ func parseBlock(c *caddy.Controller, f *Forward) error {
 		if len(ignore) == 0 {
 			return c.ArgErr()
 		}
-		for i := 0; i < len(ignore); i++ {
+		for i := range ignore {
 			f.ignored = append(f.ignored, plugin.Host(ignore[i]).NormalizeExact()...)
 		}
 	case "max_fails":
@@ -289,7 +290,49 @@ func parseBlock(c *caddy.Controller, f *Forward) error {
 		}
 		f.ErrLimitExceeded = errors.New("concurrent queries exceeded maximum " + c.Val())
 		f.maxConcurrent = int64(n)
+	case "next":
+		args := c.RemainingArgs()
+		if len(args) == 0 {
+			return c.ArgErr()
+		}
 
+		for _, rcode := range args {
+			var rc int
+			var ok bool
+
+			if rc, ok = dns.StringToRcode[strings.ToUpper(rcode)]; !ok {
+				return fmt.Errorf("%s is not a valid rcode", rcode)
+			}
+
+			f.nextAlternateRcodes = append(f.nextAlternateRcodes, rc)
+		}
+	case "failfast_all_unhealthy_upstreams":
+		args := c.RemainingArgs()
+		if len(args) != 0 {
+			return c.ArgErr()
+		}
+		f.failfastUnhealthyUpstreams = true
+	case "failover":
+		args := c.RemainingArgs()
+		if len(args) == 0 {
+			return c.ArgErr()
+		}
+		toRcode := dns.StringToRcode
+
+		for _, rcode := range args {
+			var rc int
+			var ok bool
+
+			if rc, ok = toRcode[strings.ToUpper(rcode)]; !ok {
+				if rc == dns.RcodeSuccess {
+					return fmt.Errorf("NoError cannot be used in failover")
+				}
+
+				return fmt.Errorf("%s is not a valid rcode", rcode)
+			}
+
+			f.failoverRcodes = append(f.failoverRcodes, rc)
+		}
 	default:
 		return c.Errf("unknown property '%s'", c.Val())
 	}

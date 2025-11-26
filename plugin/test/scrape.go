@@ -36,10 +36,10 @@ import (
 type (
 	// MetricFamily holds a prometheus metric.
 	MetricFamily struct {
-		Name    string        `json:"name"`
-		Help    string        `json:"help"`
-		Type    string        `json:"type"`
-		Metrics []interface{} `json:"metrics,omitempty"` // Either metric or summary.
+		Name    string `json:"name"`
+		Help    string `json:"help"`
+		Type    string `json:"type"`
+		Metrics []any  `json:"metrics,omitempty"` // Either metric or summary.
 	}
 
 	// metric is for all "single value" metrics.
@@ -150,21 +150,21 @@ func newMetricFamily(dtoMF *dto.MetricFamily) *MetricFamily {
 		Name:    dtoMF.GetName(),
 		Help:    dtoMF.GetHelp(),
 		Type:    dtoMF.GetType().String(),
-		Metrics: make([]interface{}, len(dtoMF.Metric)),
+		Metrics: make([]any, len(dtoMF.GetMetric())),
 	}
-	for i, m := range dtoMF.Metric {
+	for i, m := range dtoMF.GetMetric() {
 		if dtoMF.GetType() == dto.MetricType_SUMMARY {
 			mf.Metrics[i] = summary{
 				Labels:    makeLabels(m),
 				Quantiles: makeQuantiles(m),
-				Count:     fmt.Sprint(m.GetSummary().GetSampleCount()),
+				Count:     strconv.FormatUint(m.GetSummary().GetSampleCount(), 10),
 				Sum:       fmt.Sprint(m.GetSummary().GetSampleSum()),
 			}
 		} else if dtoMF.GetType() == dto.MetricType_HISTOGRAM {
 			mf.Metrics[i] = histogram{
 				Labels:  makeLabels(m),
 				Buckets: makeBuckets(m),
-				Count:   fmt.Sprint(m.GetHistogram().GetSampleCount()),
+				Count:   strconv.FormatUint(m.GetHistogram().GetSampleCount(), 10),
 				Sum:     fmt.Sprint(m.GetSummary().GetSampleSum()),
 			}
 		} else {
@@ -178,13 +178,13 @@ func newMetricFamily(dtoMF *dto.MetricFamily) *MetricFamily {
 }
 
 func value(m *dto.Metric) float64 {
-	if m.Gauge != nil {
+	if m.GetGauge() != nil {
 		return m.GetGauge().GetValue()
 	}
-	if m.Counter != nil {
+	if m.GetCounter() != nil {
 		return m.GetCounter().GetValue()
 	}
-	if m.Untyped != nil {
+	if m.GetUntyped() != nil {
 		return m.GetUntyped().GetValue()
 	}
 	return 0.
@@ -192,7 +192,7 @@ func value(m *dto.Metric) float64 {
 
 func makeLabels(m *dto.Metric) map[string]string {
 	result := map[string]string{}
-	for _, lp := range m.Label {
+	for _, lp := range m.GetLabel() {
 		result[lp.GetName()] = lp.GetValue()
 	}
 	return result
@@ -200,7 +200,7 @@ func makeLabels(m *dto.Metric) map[string]string {
 
 func makeQuantiles(m *dto.Metric) map[string]string {
 	result := map[string]string{}
-	for _, q := range m.GetSummary().Quantile {
+	for _, q := range m.GetSummary().GetQuantile() {
 		result[fmt.Sprint(q.GetQuantile())] = fmt.Sprint(q.GetValue())
 	}
 	return result
@@ -208,8 +208,8 @@ func makeQuantiles(m *dto.Metric) map[string]string {
 
 func makeBuckets(m *dto.Metric) map[string]string {
 	result := map[string]string{}
-	for _, b := range m.GetHistogram().Bucket {
-		result[fmt.Sprint(b.GetUpperBound())] = fmt.Sprint(b.GetCumulativeCount())
+	for _, b := range m.GetHistogram().GetBucket() {
+		result[fmt.Sprint(b.GetUpperBound())] = strconv.FormatUint(b.GetCumulativeCount(), 10)
 	}
 	return result
 }

@@ -9,6 +9,7 @@ import (
 )
 
 func setupProxyTargetCoreDNS(t *testing.T, fn func(string)) {
+	t.Helper()
 	tmpdir := t.TempDir()
 
 	content := `

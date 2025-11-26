@@ -43,6 +43,7 @@ func TestMultipleListenerMock(t *testing.T) {
 }
 
 func testListenersCalled(t *testing.T, listenerNames []string, outputs []string) {
+	t.Helper()
 	for _, name := range listenerNames {
 		err := RegisterListener(NewMockListener(name))
 		if err != nil {
@@ -79,42 +80,42 @@ func (l *mockListener) Name() string {
 	return l.name
 }
 
-func (l *mockListener) Debug(plugin string, v ...interface{}) {
+func (l *mockListener) Debug(plugin string, v ...any) {
 	log(debug, l.name+" mocked debug")
 }
 
-func (l *mockListener) Debugf(plugin string, format string, v ...interface{}) {
+func (l *mockListener) Debugf(plugin string, format string, v ...any) {
 	log(debug, l.name+" mocked debug")
 }
 
-func (l *mockListener) Info(plugin string, v ...interface{}) {
+func (l *mockListener) Info(plugin string, v ...any) {
 	log(info, l.name+" mocked info")
 }
 
-func (l *mockListener) Infof(plugin string, format string, v ...interface{}) {
+func (l *mockListener) Infof(plugin string, format string, v ...any) {
 	log(info, l.name+" mocked info")
 }
 
-func (l *mockListener) Warning(plugin string, v ...interface{}) {
+func (l *mockListener) Warning(plugin string, v ...any) {
 	log(warning, l.name+" mocked warning")
 }
 
-func (l *mockListener) Warningf(plugin string, format string, v ...interface{}) {
+func (l *mockListener) Warningf(plugin string, format string, v ...any) {
 	log(warning, l.name+" mocked warning")
 }
 
-func (l *mockListener) Error(plugin string, v ...interface{}) {
+func (l *mockListener) Error(plugin string, v ...any) {
 	log(err, l.name+" mocked error")
 }
 
-func (l *mockListener) Errorf(plugin string, format string, v ...interface{}) {
+func (l *mockListener) Errorf(plugin string, format string, v ...any) {
 	log(err, l.name+" mocked error")
 }
 
-func (l *mockListener) Fatal(plugin string, v ...interface{}) {
+func (l *mockListener) Fatal(plugin string, v ...any) {
 	log(fatal, l.name+" mocked fatal")
 }
 
-func (l *mockListener) Fatalf(plugin string, format string, v ...interface{}) {
+func (l *mockListener) Fatalf(plugin string, format string, v ...any) {
 	log(fatal, l.name+" mocked fatal")
 }

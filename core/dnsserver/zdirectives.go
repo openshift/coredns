@@ -15,7 +15,9 @@ var Directives = []string{
 	"geoip",
 	"cancel",
 	"tls",
+	"quic",
 	"timeouts",
+	"multisocket",
 	"reload",
 	"nsid",
 	"bufsize",
@@ -63,4 +65,5 @@ var Directives = []string{
 	"on",
 	"sign",
 	"view",
+	"nomad",
 }

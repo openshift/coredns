@@ -56,6 +56,7 @@ func TestLookupCache(t *testing.T) {
 }
 
 func testCase(t *testing.T, name, addr string, expectAnsLen int, expectTTL uint32) {
+	t.Helper()
 	m := new(dns.Msg)
 	m.SetQuestion(name, dns.TypeA)
 	resp, err := dns.Exchange(m, addr)
@@ -74,6 +75,7 @@ func testCase(t *testing.T, name, addr string, expectAnsLen int, expectTTL uint3
 }
 
 func testCaseDNSSEC(t *testing.T, name, addr string, bufsize int) {
+	t.Helper()
 	m := new(dns.Msg)
 	m.SetQuestion(name, dns.TypeA)
 

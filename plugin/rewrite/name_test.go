@@ -33,8 +33,7 @@ func TestRewriteIllegalName(t *testing.T) {
 }
 
 func TestRewriteNamePrefixSuffix(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string
@@ -75,8 +74,7 @@ func TestRewriteNamePrefixSuffix(t *testing.T) {
 }
 
 func TestRewriteNameNoRewrite(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string
@@ -117,8 +115,7 @@ func TestRewriteNameNoRewrite(t *testing.T) {
 }
 
 func TestRewriteNamePrefixSuffixNoAutoAnswer(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string
@@ -159,8 +156,7 @@ func TestRewriteNamePrefixSuffixNoAutoAnswer(t *testing.T) {
 }
 
 func TestRewriteNamePrefixSuffixAutoAnswer(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string
@@ -207,8 +203,7 @@ func TestRewriteNamePrefixSuffixAutoAnswer(t *testing.T) {
 }
 
 func TestRewriteNameExactAnswer(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string
@@ -255,8 +250,7 @@ func TestRewriteNameExactAnswer(t *testing.T) {
 }
 
 func TestRewriteNameRegexAnswer(t *testing.T) {
-	ctx, close := context.WithCancel(context.TODO())
-	defer close()
+	ctx := t.Context()
 
 	tests := []struct {
 		next     string

@@ -33,15 +33,12 @@ func (k *Kubernetes) AutoPath(state request.Request) []string {
 		return nil
 	}
 
-	search := make([]string, 3)
+	totalSize := 3 + len(k.autoPathSearch) + 1 // +1 for sentinel
+	search := make([]string, 0, totalSize)
 	if zone == "." {
-		search[0] = pod.Namespace + ".svc."
-		search[1] = "svc."
-		search[2] = "."
+		search = append(search, pod.Namespace+".svc.", "svc.", ".")
 	} else {
-		search[0] = pod.Namespace + ".svc." + zone
-		search[1] = "svc." + zone
-		search[2] = zone
+		search = append(search, pod.Namespace+".svc."+zone, "svc."+zone, zone)
 	}
 
 	search = append(search, k.autoPathSearch...)

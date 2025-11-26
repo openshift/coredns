@@ -9,13 +9,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Setup Go Version
         run: echo "GO_VERSION=$(cat .go-version)" >> $GITHUB_ENV
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
         id: go
@@ -34,13 +34,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Setup Go Version
         run: echo "GO_VERSION=$(cat .go-version)" >> $GITHUB_ENV
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
         id: go
@@ -56,12 +56,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
+
+      - name: Setup Go Version
+        run: echo "GO_VERSION=$(cat .go-version)" >> $GITHUB_ENV
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00  # v6.0.0
         with:
-          go-version: '~1.21.0'
+          go-version: ${{ env.GO_VERSION }}
         id: go
 
       - name: Build
@@ -69,7 +72,7 @@ jobs:
 
       - name: Test
         run: |
-          go install github.com/fatih/faillint@latest
+          go install github.com/fatih/faillint@c56e3ec6dbfc933bbeb884fd31f2bcd41f712657 # v1.15.0
           ( cd test; go test -race ./... )
 
   test-makefile-release:
@@ -77,13 +80,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Install dependencies
         run: sudo apt-get install make curl
 
-      - name: Test Makefile.release
+      - name: Test Makefile.release release
+        run: make GITHUB_ACCESS_TOKEN=x release -f Makefile.release
+
+      - name: Test Makefile.release release/github-push (dry-run)
         run: make GITHUB_ACCESS_TOKEN=x -n release github-push -f Makefile.release
 
-      - name: Test Makefile.docker
+      - name: Test Makefile.docker release/github-push (dry-run)
         run: make VERSION=x DOCKER=x -n release docker-push -f Makefile.docker

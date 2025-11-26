@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
@@ -111,6 +113,7 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 
 	k8s.Upstream = upstream.New()
 
+	k8s.startupTimeout = time.Second * 5
 	for c.NextBlock() {
 		switch c.Val() {
 		case "endpoint_pod_names":
@@ -211,9 +214,8 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				if ignore == "empty_service" {
 					k8s.opts.ignoreEmptyService = true
 					continue
-				} else {
-					return nil, fmt.Errorf("unable to parse ignore value: '%v'", ignore)
 				}
+				return nil, fmt.Errorf("unable to parse ignore value: '%v'", ignore)
 			}
 		case "kubeconfig":
 			args := c.RemainingArgs()
@@ -229,6 +231,19 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				overrides,
 			)
 			k8s.ClientConfig = config
+		case "multicluster":
+			k8s.opts.multiclusterZones = plugin.OriginsFromArgsOrServerBlock(c.RemainingArgs(), []string{})
+		case "startup_timeout":
+			args := c.RemainingArgs()
+			if len(args) == 0 {
+				return nil, c.ArgErr()
+			} else {
+				var err error
+				k8s.startupTimeout, err = time.ParseDuration(args[0])
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse startup_timeout: %v, %s", args[0], err)
+				}
+			}
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}
@@ -236,6 +251,13 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 
 	if len(k8s.Namespaces) != 0 && k8s.opts.namespaceLabelSelector != nil {
 		return nil, c.Errf("namespaces and namespace_labels cannot both be set")
+	}
+
+	for _, multiclusterZone := range k8s.opts.multiclusterZones {
+		if !slices.Contains(k8s.Zones, multiclusterZone) {
+			fmt.Println(k8s.Zones)
+			return nil, c.Errf("is not authoritative for the multicluster zone %s", multiclusterZone)
+		}
 	}
 
 	return k8s, nil

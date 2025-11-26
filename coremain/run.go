@@ -12,6 +12,8 @@ import (
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
+
+	"go.uber.org/automaxprocs/maxprocs"
 )
 
 func init() {
@@ -31,7 +33,7 @@ func init() {
 	flag.StringVar(&dnsserver.Port, serverType+".port", dnsserver.DefaultPort, "Default port")
 	flag.StringVar(&dnsserver.Port, "p", dnsserver.DefaultPort, "Default port")
 
-	caddy.AppName = coreName
+	caddy.AppName = CoreName
 	caddy.AppVersion = CoreVersion
 }
 
@@ -54,6 +56,11 @@ func Run() {
 	if plugins {
 		fmt.Println(caddy.DescribePlugins())
 		os.Exit(0)
+	}
+
+	_, err := maxprocs.Set(maxprocs.Logger(log.Printf))
+	if err != nil {
+		log.Println("[WARNING] Failed to set GOMAXPROCS:", err)
 	}
 
 	// Get Corefile input
@@ -82,7 +89,7 @@ func Run() {
 // enabled. If this process is an upgrade, however, and the user
 // might not be there anymore, this just logs to the process
 // log and exits.
-func mustLogFatal(args ...interface{}) {
+func mustLogFatal(args ...any) {
 	if !caddy.IsUpgrade() {
 		log.SetOutput(os.Stderr)
 	}
@@ -176,7 +183,6 @@ var (
 
 // Build information obtained with the help of -ldflags
 var (
-	// nolint
 	appVersion = "(untracked dev build)" // inferred at startup
 	devBuild   = true                    // inferred at startup
 

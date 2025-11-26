@@ -57,7 +57,7 @@ func (e *Erratic) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 		rr.Header().Name = state.QName()
 		m.Answer = append(m.Answer, &rr)
 		if e.large {
-			for i := 0; i < 29; i++ {
+			for range 29 {
 				m.Answer = append(m.Answer, &rr)
 			}
 		}

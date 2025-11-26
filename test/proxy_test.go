@@ -70,8 +70,7 @@ func BenchmarkProxyLookup(b *testing.B) {
 	m := new(dns.Msg)
 	m.SetQuestion("example.org.", dns.TypeA)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		if _, err := dns.Exchange(m, udp); err != nil {
 			b.Fatal("Expected to receive reply, but didn't")
 		}

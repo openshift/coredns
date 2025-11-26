@@ -4,14 +4,44 @@ import (
 	"testing"
 )
 
-func TestCorefile1(t *testing.T) {
-	corefile := `ȶ
+// TestCorefileParsing tests the Corefile parsing functionality.
+// Expected to not panic or timeout.
+func TestCorefileParsing(t *testing.T) {
+	cases := []struct {
+		name     string
+		corefile string
+	}{
+		{
+			// See: https://github.com/coredns/coredns/pull/4637
+			name: "PR4637_" + "NoPanicOnEscapedBackslashesAndUnicode",
+			corefile: `\\\\ȶ.
 acl
-`
-	// this crashed, now it should return an error.
-	i, _, _, err := CoreDNSServerAndPorts(corefile)
-	if err == nil {
-		defer i.Stop()
-		t.Fatalf("Expected an error got none")
+`,
+		},
+		{
+			// See: https://github.com/coredns/coredns/pull/7571
+			name: "PR7571_" + "InvalidBlockFailsToStart",
+			corefile: "\xD9//\n" +
+				"hosts#\x90\xD0{lc\x0C{\n" +
+				"'{mport\xEF1\x0C}\x0B''",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("Expected no panic, but got %v", r)
+				}
+			}()
+
+			i, _, _, _ := CoreDNSServerAndPorts(tc.corefile)
+
+			defer func() {
+				if i != nil {
+					i.Stop()
+				}
+			}()
+		})
 	}
 }

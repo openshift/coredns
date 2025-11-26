@@ -18,6 +18,7 @@ www IN A 127.0.0.1
 `
 
 func TestWalk(t *testing.T) {
+	t.Parallel()
 	tempdir, err := createFiles(t)
 	if err != nil {
 		t.Fatal(err)
@@ -38,13 +39,14 @@ func TestWalk(t *testing.T) {
 
 	// db.example.org and db.example.com should be here (created in createFiles)
 	for _, name := range []string{"example.com.", "example.org."} {
-		if _, ok := a.Zones.Z[name]; !ok {
+		if _, ok := a.Z[name]; !ok {
 			t.Errorf("%s should have been added", name)
 		}
 	}
 }
 
 func TestWalkNonExistent(t *testing.T) {
+	t.Parallel()
 	nonExistingDir := "highly_unlikely_to_exist_dir"
 
 	ldr := loader{
@@ -62,6 +64,7 @@ func TestWalkNonExistent(t *testing.T) {
 }
 
 func createFiles(t *testing.T) (string, error) {
+	t.Helper()
 	dir := t.TempDir()
 
 	for _, name := range dbFiles {

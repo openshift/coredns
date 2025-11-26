@@ -273,8 +273,7 @@ func BenchmarkLogged(b *testing.B) {
 
 	rec := dnstest.NewRecorder(&test.ResponseWriter{})
 
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		logger.ServeDNS(ctx, rec, r)
 	}
 }

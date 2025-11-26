@@ -2,6 +2,7 @@ package rewrite
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -53,6 +54,12 @@ func (u *MockedUpstream) Lookup(ctx context.Context, state request.Request, name
 			test.A("orders.webapp.eu.org.   120  IN  A   20.0.0.9"),
 		}
 		return m, nil
+	case "music.truncated.spotify.com.":
+		m.Answer = []dns.RR{
+			test.A("music.truncated.spotify.com.   120  IN  A   10.1.0.9"),
+		}
+		m.Truncated = true
+		return m, nil
 	}
 	return &dns.Msg{}, nil
 }
@@ -68,6 +75,7 @@ func TestCNameTargetRewrite(t *testing.T) {
 		{[]string{"continue", "cname", "suffix", "uvw.", "xyz."}, reflect.TypeOf(&cnameTargetRule{})},
 		{[]string{"continue", "cname", "substring", "efgh", "zzzz.www"}, reflect.TypeOf(&cnameTargetRule{})},
 		{[]string{"continue", "cname", "regex", `(.*)\.web\.(.*)\.site\.`, `{1}.webapp.{2}.org.`}, reflect.TypeOf(&cnameTargetRule{})},
+		{[]string{"continue", "cname", "exact", "music.truncated.spotify.com.", "music.truncated.spotify.com."}, reflect.TypeOf(&cnameTargetRule{})},
 	}
 	for i, r := range ruleset {
 		rule, err := newRule(r.args...)
@@ -81,15 +89,17 @@ func TestCNameTargetRewrite(t *testing.T) {
 		cnameTargetRule.Upstream = &MockedUpstream{}
 		rules = append(rules, rule)
 	}
-	doTestCNameTargetTests(rules, t)
+	doTestCNameTargetTests(t, rules)
 }
 
-func doTestCNameTargetTests(rules []Rule, t *testing.T) {
+func doTestCNameTargetTests(t *testing.T, rules []Rule) {
+	t.Helper()
 	tests := []struct {
-		from           string
-		fromType       uint16
-		answer         []dns.RR
-		expectedAnswer []dns.RR
+		from              string
+		fromType          uint16
+		answer            []dns.RR
+		expectedAnswer    []dns.RR
+		expectedTruncated bool
 	}{
 		{"abc.example.com", dns.TypeA,
 			[]dns.RR{
@@ -100,6 +110,7 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.CNAME("abc.example.com.  5   IN  CNAME  xyz.example.com."),
 				test.A("xyz.example.com.  3600  IN  A  3.4.5.6"),
 			},
+			false,
 		},
 		{"abc.example.com", dns.TypeAAAA,
 			[]dns.RR{
@@ -110,6 +121,7 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.CNAME("abc.example.com.  5   IN  CNAME  xyz.example.com."),
 				test.AAAA("xyz.example.com.  3600  IN  AAAA  3a01:7e00::f03c:91ff:fe79:234c"),
 			},
+			false,
 		},
 		{"chat.openai.com", dns.TypeA,
 			[]dns.RR{
@@ -121,6 +133,7 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.CNAME("chat.openai.com.  20   IN  CNAME  bard.google.com.cdn.cloudflare.net."),
 				test.A("bard.google.com.cdn.cloudflare.net.  1800  IN  A  9.7.2.1"),
 			},
+			false,
 		},
 		{"coredns.io", dns.TypeA,
 			[]dns.RR{
@@ -131,6 +144,7 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.CNAME("coredns.io.  100   IN  CNAME  www.hosting.xyz."),
 				test.A("www.hosting.xyz.  500  IN  A  20.30.40.50"),
 			},
+			false,
 		},
 		{"core.dns.rocks", dns.TypeA,
 			[]dns.RR{
@@ -142,6 +156,7 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.A("abcd.zzzz.www.pqrst.   120  IN  A   101.20.5.1"),
 				test.A("abcd.zzzz.www.pqrst.   120  IN  A   101.20.5.2"),
 			},
+			false,
 		},
 		{"order.service.eu", dns.TypeA,
 			[]dns.RR{
@@ -152,6 +167,17 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				test.CNAME("order.service.eu.  200   IN  CNAME  orders.webapp.eu.org."),
 				test.A("orders.webapp.eu.org.   120  IN  A   20.0.0.9"),
 			},
+			false,
+		},
+		{"music.spotify.com", dns.TypeA,
+			[]dns.RR{
+				test.CNAME("music.spotify.com.  200   IN  CNAME  music.truncated.spotify.com."),
+			},
+			[]dns.RR{
+				test.CNAME("music.spotify.com.  200   IN  CNAME  music.truncated.spotify.com."),
+				test.A("music.truncated.spotify.com.   120  IN  A   10.1.0.9"),
+			},
+			true,
 		},
 	}
 	ctx := context.TODO()
@@ -176,5 +202,64 @@ func doTestCNameTargetTests(rules []Rule, t *testing.T) {
 				i, tc.from, tc.fromType, resp.Answer, tc.expectedAnswer)
 			continue
 		}
+		if resp.Truncated != tc.expectedTruncated {
+			t.Errorf("Test %d: FAIL %s (%d) Actual and expected truncated flag do not match, actual: %v, expected: %v",
+				i, tc.from, tc.fromType, resp.Truncated, tc.expectedTruncated)
+		}
+	}
+}
+
+// nilUpstream returns a nil message to simulate an upstream failure path.
+type nilUpstream struct{}
+
+func (f *nilUpstream) Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error) {
+	return nil, nil
+}
+
+// errUpstream returns a nil message with an error to simulate an upstream failure path.
+type errUpstream struct{}
+
+func (f *errUpstream) Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error) {
+	return nil, errors.New("upstream failure")
+}
+
+func TestCNAMETargetRewrite_upstreamFailurePaths(t *testing.T) {
+	cases := []struct {
+		name     string
+		upstream UpstreamInt
+	}{
+		{name: "nil message, no error", upstream: &nilUpstream{}},
+		{name: "nil message, with error", upstream: &errUpstream{}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := cnameTargetRule{
+				rewriteType:     ExactMatch,
+				paramFromTarget: "bad.target.",
+				paramToTarget:   "good.target.",
+				nextAction:      Stop,
+				Upstream:        tc.upstream,
+			}
+
+			req := new(dns.Msg)
+			req.SetQuestion("bad.test.", dns.TypeA)
+			state := request.Request{Req: req}
+
+			rrState := &cnameTargetRuleWithReqState{rule: rule, state: state, ctx: context.Background()}
+
+			res := new(dns.Msg)
+			res.SetReply(req)
+			res.Answer = []dns.RR{&dns.CNAME{Hdr: dns.RR_Header{Name: "bad.test.", Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: 60}, Target: "bad.target."}}
+
+			rr := &dns.CNAME{Hdr: dns.RR_Header{Name: "bad.test.", Rrtype: dns.TypeCNAME, Class: dns.ClassINET, Ttl: 60}, Target: "bad.target."}
+
+			rrState.RewriteResponse(res, rr)
+
+			finalTarget := res.Answer[0].(*dns.CNAME).Target
+			if finalTarget != "bad.target." {
+				t.Errorf("Expected answer to be %q, but got %q", "bad.target.", finalTarget)
+			}
+		})
 	}
 }

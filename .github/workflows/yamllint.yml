@@ -8,9 +8,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 'Checkout'
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: 'Yamllint'
-        uses: karancode/yamllint-github-action@fdef6bc189425ecc84cc4543b2674566c0827053
+        uses: karancode/yamllint-github-action@4052d365f09b8d34eb552c363d1141fd60e2aeb2
         with:
           yamllint_file_or_dir: '.'
           yamllint_strict: false

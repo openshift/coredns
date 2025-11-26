@@ -40,3 +40,10 @@ func TestPrometheusParse(t *testing.T) {
 		}
 	}
 }
+
+func TestSetupBasic(t *testing.T) {
+	c := caddy.NewTestController("dns", "prometheus localhost:9153")
+	if err := setup(c); err != nil {
+		t.Fatalf("setup returned error: %v", err)
+	}
+}

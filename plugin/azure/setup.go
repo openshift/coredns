@@ -73,7 +73,7 @@ func parse(c *caddy.Controller) (auth.EnvironmentSettings, map[string][]string, 
 	for c.Next() {
 		args := c.RemainingArgs()
 
-		for i := 0; i < len(args); i++ {
+		for i := range args {
 			parts := strings.SplitN(args[i], ":", 2)
 			if len(parts) != 2 {
 				return env, resourceGroupMapping, accessMap, fall, c.Errf("invalid resource group/zone: %q", args[i])

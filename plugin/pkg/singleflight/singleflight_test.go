@@ -27,7 +27,7 @@ import (
 
 func TestDo(t *testing.T) {
 	var g Group
-	v, err := g.Do(1, func() (interface{}, error) {
+	v, err := g.Do(1, func() (any, error) {
 		return "bar", nil
 	})
 	if got, want := fmt.Sprintf("%v (%T)", v, v), "bar (string)"; got != want {
@@ -41,7 +41,7 @@ func TestDo(t *testing.T) {
 func TestDoErr(t *testing.T) {
 	var g Group
 	someErr := errors.New("some error")
-	v, err := g.Do(1, func() (interface{}, error) {
+	v, err := g.Do(1, func() (any, error) {
 		return nil, someErr
 	})
 	if err != someErr {
@@ -56,14 +56,14 @@ func TestDoDupSuppress(t *testing.T) {
 	var g Group
 	c := make(chan string)
 	var calls int32
-	fn := func() (interface{}, error) {
+	fn := func() (any, error) {
 		atomic.AddInt32(&calls, 1)
 		return <-c, nil
 	}
 
 	const n = 10
 	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
+	for range n {
 		wg.Add(1)
 		go func() {
 			v, err := g.Do(1, fn)

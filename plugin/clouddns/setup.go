@@ -43,7 +43,7 @@ func setup(c *caddy.Controller) error {
 
 		args := c.RemainingArgs()
 
-		for i := 0; i < len(args); i++ {
+		for i := range args {
 			parts := strings.SplitN(args[i], ":", 3)
 			if len(parts) != 3 {
 				return plugin.Error("clouddns", c.Errf("invalid zone %q", args[i]))

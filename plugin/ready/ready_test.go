@@ -67,3 +67,57 @@ func TestReady(t *testing.T) {
 	}
 	response.Body.Close()
 }
+
+func TestReady_Continuously(t *testing.T) {
+	rd := &ready{Addr: ":0"}
+	e := &erratic.Erratic{}
+	plugins.Append(e, "erratic")
+	plugins.keepReadiness = true
+
+	if err := rd.onStartup(); err != nil {
+		t.Fatalf("Unable to startup the readiness server: %v", err)
+	}
+
+	defer rd.onFinalShutdown()
+
+	address := fmt.Sprintf("http://%s/ready", rd.ln.Addr().String())
+
+	response, err := http.Get(address)
+	if err != nil {
+		t.Fatalf("Unable to query %s: %v", address, err)
+	}
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("Invalid status code: expecting %d, got %d", 503, response.StatusCode)
+	}
+	response.Body.Close()
+
+	// make it ready by giving erratic 3 queries.
+	m := new(dns.Msg)
+	m.SetQuestion("example.org.", dns.TypeA)
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+
+	response, err = http.Get(address)
+	if err != nil {
+		t.Fatalf("Unable to query %s: %v", address, err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("Invalid status code: expecting %d, got %d", 200, response.StatusCode)
+	}
+	response.Body.Close()
+
+	// make erratic not-ready by giving it more queries, this should change the process readiness
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+	e.ServeDNS(context.TODO(), &test.ResponseWriter{}, m)
+
+	response, err = http.Get(address)
+	if err != nil {
+		t.Fatalf("Unable to query %s: %v", address, err)
+	}
+	if response.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("Invalid status code: expecting %d, got %d", 503, response.StatusCode)
+	}
+	response.Body.Close()
+}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,9 @@ import (
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
+	mcsClientsetFake "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/fake"
+	mcsClientset "sigs.k8s.io/mcs-api/pkg/client/clientset/versioned/typed/apis/v1alpha1"
 )
 
 func inc(ip net.IP) {
@@ -28,29 +32,32 @@ func inc(ip net.IP) {
 	}
 }
 
-func kubernetesWithFakeClient(ctx context.Context, zone, cidr string, initEndpointsCache bool, svcType string) *Kubernetes {
+func kubernetesWithFakeClient(ctx context.Context, cidr string, initEndpointsCache bool, svcType string) *Kubernetes {
 	client := fake.NewSimpleClientset()
+	mcsClient := mcsClientsetFake.NewSimpleClientset()
 	dco := dnsControlOpts{
-		zones:              []string{zone},
+		zones:              []string{"cluster.local.", "clusterset.local."},
+		multiclusterZones:  []string{"clusterset.local."},
 		initEndpointsCache: initEndpointsCache,
 	}
-	controller := newdnsController(ctx, client, dco)
+	controller := newdnsController(ctx, client, mcsClient.MulticlusterV1alpha1(), dco)
 
 	// Add resources
 	_, err := client.CoreV1().Namespaces().Create(ctx, &api.Namespace{ObjectMeta: meta.ObjectMeta{Name: "testns"}}, meta.CreateOptions{})
 	if err != nil {
 		log.Fatal(err)
 	}
-	generateSvcs(cidr, svcType, client)
-	generateEndpointSlices(cidr, client)
-	k := New([]string{"cluster.local."})
+	generateSvcs(cidr, svcType, client, mcsClient.MulticlusterV1alpha1())
+	generateEndpointSlices(cidr, svcType, client)
+	k := New([]string{"cluster.local.", "clusterset.local."})
 	k.APIConn = controller
+	k.opts.multiclusterZones = []string{"clusterset.local."}
 	return k
 }
 
 func BenchmarkController(b *testing.B) {
 	ctx := context.Background()
-	k := kubernetesWithFakeClient(ctx, "cluster.local.", "10.0.0.0/24", true, "all")
+	k := kubernetesWithFakeClient(ctx, "10.0.0.0/24", true, "all")
 
 	go k.APIConn.Run()
 	defer k.APIConn.Stop()
@@ -62,15 +69,14 @@ func BenchmarkController(b *testing.B) {
 	m := new(dns.Msg)
 	m.SetQuestion("svc1.testns.svc.cluster.local.", dns.TypeA)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		k.ServeDNS(ctx, rw, m)
 	}
 }
 
 func TestEndpointsDisabled(t *testing.T) {
 	ctx := context.Background()
-	k := kubernetesWithFakeClient(ctx, "cluster.local.", "10.0.0.0/30", false, "headless")
+	k := kubernetesWithFakeClient(ctx, "10.0.0.0/30", false, "headless")
 	k.opts.initEndpointsCache = false
 
 	go k.APIConn.Run()
@@ -90,7 +96,7 @@ func TestEndpointsDisabled(t *testing.T) {
 
 func TestEndpointsEnabled(t *testing.T) {
 	ctx := context.Background()
-	k := kubernetesWithFakeClient(ctx, "cluster.local.", "10.0.0.0/30", true, "headless")
+	k := kubernetesWithFakeClient(ctx, "10.0.0.0/30", true, "headless")
 	k.opts.initEndpointsCache = true
 
 	go k.APIConn.Run()
@@ -108,7 +114,27 @@ func TestEndpointsEnabled(t *testing.T) {
 	}
 }
 
-func generateEndpointSlices(cidr string, client kubernetes.Interface) {
+func TestMultiClusterHeadless(t *testing.T) {
+	ctx := context.Background()
+	k := kubernetesWithFakeClient(ctx, "10.0.0.0/30", true, "mcs-headless")
+	k.opts.initEndpointsCache = true
+
+	go k.APIConn.Run()
+	defer k.APIConn.Stop()
+	for !k.APIConn.HasSynced() {
+		time.Sleep(time.Millisecond)
+	}
+
+	rw := &dnstest.Recorder{ResponseWriter: &test.ResponseWriter{}}
+	m := new(dns.Msg)
+	m.SetQuestion("svc2.testns.svc.clusterset.local.", dns.TypeA)
+	k.ServeDNS(ctx, rw, m)
+	if rw.Msg.Rcode != dns.RcodeSuccess {
+		t.Errorf("Expected SUCCESS, got %v", dns.RcodeToString[rw.Msg.Rcode])
+	}
+}
+
+func generateEndpointSlices(cidr string, svcType string, client kubernetes.Interface) {
 	// https://groups.google.com/d/msg/golang-nuts/zlcYA4qk-94/TWRFHeXJCcYJ
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -140,8 +166,12 @@ func generateEndpointSlices(cidr string, client kubernetes.Interface) {
 				Hostname:  &hostname,
 			},
 		}
-		eps.ObjectMeta.Name = "svc" + strconv.Itoa(count)
-		eps.ObjectMeta.Labels = map[string]string{discovery.LabelServiceName: eps.ObjectMeta.Name}
+		eps.Name = "svc" + strconv.Itoa(count)
+		if !strings.Contains(svcType, "mcs") {
+			eps.Labels = map[string]string{discovery.LabelServiceName: eps.Name}
+		} else {
+			eps.Labels = map[string]string{mcs.LabelServiceName: eps.Name}
+		}
 		_, err := client.DiscoveryV1().EndpointSlices("testns").Create(ctx, eps, meta.CreateOptions{})
 		if err != nil {
 			log.Fatal(err)
@@ -150,7 +180,7 @@ func generateEndpointSlices(cidr string, client kubernetes.Interface) {
 	}
 }
 
-func generateSvcs(cidr string, svcType string, client kubernetes.Interface) {
+func generateSvcs(cidr string, svcType string, client kubernetes.Interface, mcsClient mcsClientset.MulticlusterV1alpha1Interface) {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
 		log.Fatal(err)
@@ -173,13 +203,19 @@ func generateSvcs(cidr string, svcType string, client kubernetes.Interface) {
 			createExternalSvc(count, client, ip)
 			count++
 		}
+	case "mcs-headless":
+		for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
+			createMultiClusterHeadlessSvc(count, mcsClient, ip)
+			count++
+		}
 	default:
 		for ip := ip.Mask(ipnet.Mask); ipnet.Contains(ip); inc(ip) {
-			if count%3 == 0 {
+			switch count % 3 {
+			case 0:
 				createClusterIPSvc(count, client, ip)
-			} else if count%3 == 1 {
+			case 1:
 				createHeadlessSvc(count, client, ip)
-			} else if count%3 == 2 {
+			case 2:
 				createExternalSvc(count, client, ip)
 			}
 			count++
@@ -237,10 +273,28 @@ func createExternalSvc(suffix int, client kubernetes.Interface, ip net.IP) {
 	}, meta.CreateOptions{})
 }
 
+func createMultiClusterHeadlessSvc(suffix int, mcsClient mcsClientset.MulticlusterV1alpha1Interface, ip net.IP) {
+	ctx := context.TODO()
+	mcsClient.ServiceImports("testns").Create(ctx, &mcs.ServiceImport{
+		ObjectMeta: meta.ObjectMeta{
+			Name:      "svc" + strconv.Itoa(suffix),
+			Namespace: "testns",
+		},
+		Spec: mcs.ServiceImportSpec{
+			Ports: []mcs.ServicePort{{
+				Name:     "http",
+				Protocol: "tcp",
+				Port:     80,
+			}},
+			Type: mcs.Headless,
+		},
+	}, meta.CreateOptions{})
+}
+
 func TestServiceModified(t *testing.T) {
-	var tests = []struct {
-		oldSvc   interface{}
-		newSvc   interface{}
+	tests := []struct {
+		oldSvc   any
+		newSvc   any
 		ichanged bool
 		echanged bool
 	}{

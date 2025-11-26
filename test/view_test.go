@@ -140,6 +140,7 @@ func TestView(t *testing.T) {
 }
 
 func viewTest(t *testing.T, testName, addr, qname string, qtype uint16, expectRcode int, expectAnswers []dns.RR) {
+	t.Helper()
 	t.Run(testName, func(t *testing.T) {
 		m := new(dns.Msg)
 

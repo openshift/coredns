@@ -70,7 +70,7 @@ func TestPrint(t *testing.T) {
 
 	*/
 
-	f, err := os.CreateTemp("", "print_test_tmp")
+	f, err := os.CreateTemp(t.TempDir(), "print_test_tmp")
 	if err != nil {
 		t.Error(err)
 	}

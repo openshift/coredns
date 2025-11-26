@@ -20,6 +20,8 @@ func (r *random) String() string { return "random" }
 
 func (r *random) List(p []*Proxy) []*Proxy {
 	switch len(p) {
+	case 0:
+		return nil
 	case 1:
 		return p
 	case 2:
@@ -46,6 +48,9 @@ type roundRobin struct {
 func (r *roundRobin) String() string { return "round_robin" }
 
 func (r *roundRobin) List(p []*Proxy) []*Proxy {
+	if len(p) == 0 {
+		return nil
+	}
 	poolLen := uint32(len(p))
 	i := atomic.AddUint32(&r.robin, 1) % poolLen
 

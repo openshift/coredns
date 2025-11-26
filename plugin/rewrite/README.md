@@ -51,6 +51,7 @@ will behave as follows:
 
    * `continue` will continue applying the next rule in the rule list.
    * `stop` will consider the current rule the last rule and will not continue.  The default behaviour is `stop`
+   * When multiple rules are matched, the request rewrite follows the line order in the configuration, while the response rewrite(`answer` option) is executed in reverse order.
 
 ## Examples
 
@@ -393,11 +394,12 @@ The values of FROM and TO can be any of the following, text value or numeric:
 
 ## EDNS0 Options
 
-Using the FIELD edns0, you can set, append, or replace specific EDNS0 options in the request.
+Using the FIELD edns0, you can set, append, replace, or unset specific EDNS0 options in the request.
 
 * `replace` will modify any "matching" option with the specified option. The criteria for "matching" varies based on EDNS0 type.
 * `append` will add the option only if no matching option exists
 * `set` will modify a matching option or add one if none is found
+* `unset` will remove the matching option if one exists
 
 Currently supported are `EDNS0_LOCAL`, `EDNS0_NSID` and `EDNS0_SUBNET`.
 
@@ -443,10 +445,17 @@ some-plugin
 rewrite edns0 local set 0xffee {some-plugin/some-label}
 ~~~
 
+A local option may be removed by unsetting its code. Example:
+
+~~~
+rewrite edns0 local unset 0xffee
+~~~
+
 ### EDNS0_NSID
 
 This has no fields; it will add an NSID option with an empty string for the NSID. If the option already exists
 and the action is `replace` or `set`, then the NSID in the option will be set to the empty string.
+The option can be removed with the `unset` action.
 
 ### EDNS0_SUBNET
 
@@ -462,8 +471,36 @@ rewrite edns0 subnet set 24 56
 * If the query's source IP address is an IPv4 address, the first 24 bits in the IP will be the network subnet.
 * If the query's source IP address is an IPv6 address, the first 56 bits in the IP will be the network subnet.
 
+This option can be removed by using `unset`:
 
-### CNAME Field Rewrites
+~~~
+rewrite edns0 subnet unset
+~~~
+
+### EDNS0 Revert
+
+Using the `revert` flag, you can revert the changes made by this rewrite call, so the response will not contain this option.
+
+This example sets option, but response will not contain it
+~~~ corefile
+. {
+    rewrite edns0 local set 0xffee abcd revert
+}
+~~~
+
+If only some calls contain the `revert` flag, then the value in the response will be changed to the previous one. So, in this example, the response will contain `abcd` data at `0xffee` 
+~~~ corefile
+. {
+    rewrite continue {
+        edns0 local set 0xffee abcd
+    }
+    
+    rewrite edns0 local replace 0xffee bcde revert
+}
+~~~
+
+
+## CNAME Field Rewrites
 
 There might be a scenario where you want the `CNAME` target of the response to be rewritten. You can do this by using the `CNAME` field rewrite. This will generate new answer records according to the new `CNAME` target.
 

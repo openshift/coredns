@@ -238,14 +238,20 @@ func (w *testImportOrderingWalker) walk(path string, info os.FileInfo, _ error) 
 	blocks := [3][]*ast.ImportSpec{}
 	prevpos := 0
 	bl := 0
+	reportedTooManyBlocks := false
 	for _, im := range f.Imports {
 		line := fs.Position(im.Path.Pos()).Line
 		if line-prevpos > 1 && prevpos > 0 {
 			bl++
 		}
 		if bl > 2 {
-			absPath, _ := filepath.Abs(path)
-			w.Errors = append(w.Errors, fmt.Errorf("more than %d import blocks in %q", bl, absPath))
+			if !reportedTooManyBlocks {
+				absPath, _ := filepath.Abs(path)
+				w.Errors = append(w.Errors, fmt.Errorf("more than %d import blocks in %q", bl, absPath))
+				reportedTooManyBlocks = true
+			}
+			// Clamp to last valid block index to avoid out-of-bounds access
+			bl = 2
 		}
 		blocks[bl] = append(blocks[bl], im)
 		prevpos = line

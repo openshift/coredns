@@ -40,8 +40,8 @@ func (r *cnameTargetRule) getFromAndToTarget(inputCName string) (from string, to
 	case ExactMatch:
 		return r.paramFromTarget, r.paramToTarget
 	case PrefixMatch:
-		if strings.HasPrefix(inputCName, r.paramFromTarget) {
-			return inputCName, r.paramToTarget + strings.TrimPrefix(inputCName, r.paramFromTarget)
+		if after, ok := strings.CutPrefix(inputCName, r.paramFromTarget); ok {
+			return inputCName, r.paramToTarget + after
 		}
 	case SuffixMatch:
 		if strings.HasSuffix(inputCName, r.paramFromTarget) {
@@ -49,7 +49,7 @@ func (r *cnameTargetRule) getFromAndToTarget(inputCName string) (from string, to
 		}
 	case SubstringMatch:
 		if strings.Contains(inputCName, r.paramFromTarget) {
-			return inputCName, strings.Replace(inputCName, r.paramFromTarget, r.paramToTarget, -1)
+			return inputCName, strings.ReplaceAll(inputCName, r.paramFromTarget, r.paramToTarget)
 		}
 	case RegexMatch:
 		pattern := regexp.MustCompile(r.paramFromTarget)
@@ -60,7 +60,7 @@ func (r *cnameTargetRule) getFromAndToTarget(inputCName string) (from string, to
 		substitution := r.paramToTarget
 		for groupIndex, groupValue := range regexGroups {
 			groupIndexStr := "{" + strconv.Itoa(groupIndex) + "}"
-			substitution = strings.Replace(substitution, groupIndexStr, groupValue, -1)
+			substitution = strings.ReplaceAll(substitution, groupIndexStr, groupValue)
 		}
 		return inputCName, substitution
 	}
@@ -77,10 +77,17 @@ func (r *cnameTargetRuleWithReqState) RewriteResponse(res *dns.Msg, rr dns.RR) {
 			if cname.Target == fromTarget {
 				// create upstream request with the new target with the same qtype
 				r.state.Req.Question[0].Name = toTarget
+				// upRes can be nil if the internal query path didn't write a response
+				// (e.g. a plugin returned a success rcode without writing, dropped the query,
+				// or the context was canceled). Guard upRes before dereferencing.
 				upRes, err := r.rule.Upstream.Lookup(r.ctx, r.state, toTarget, r.state.Req.Question[0].Qtype)
-
 				if err != nil {
-					log.Errorf("Error upstream request %v", err)
+					log.Errorf("upstream lookup failed: %v", err)
+					return
+				}
+				if upRes == nil {
+					log.Errorf("upstream lookup returned nil")
+					return
 				}
 
 				var newAnswer []dns.RR
@@ -100,6 +107,9 @@ func (r *cnameTargetRuleWithReqState) RewriteResponse(res *dns.Msg, rr dns.RR) {
 					}
 				}
 				res.Answer = newAnswer
+				// if not propagated, the truncated response might get cached,
+				// and it will be impossible to resolve the full response
+				res.Truncated = upRes.Truncated
 			}
 		}
 	}
