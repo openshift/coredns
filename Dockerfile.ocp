@@ -3,7 +3,7 @@ WORKDIR /go/src/github.com/coredns/coredns
 COPY . .
 RUN GO111MODULE=on GOFLAGS=-mod=vendor go build -o coredns .
 
-FROM registry.ci.openshift.org/ocp/4.22:base-rhel9
+FROM registry.ci.openshift.org/ocp/4.22:base-rhel9-minimal
 COPY --from=builder /go/src/github.com/coredns/coredns/coredns /usr/bin/
 
 ENTRYPOINT ["/usr/bin/coredns"]
