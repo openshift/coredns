@@ -6,3 +6,4 @@ coredns.exe
 Corefile
 /build/
 release/
+.claude/settings.local.json
