@@ -10,7 +10,7 @@ CGO_ENABLED?=0
 GOLANG_VERSION ?= $(shell cat .go-version)
 
 export GOSUMDB = sum.golang.org
-export GOTOOLCHAIN = local
+export GOTOOLCHAIN = go$(GOLANG_VERSION)
 
 .PHONY: all
 all: coredns

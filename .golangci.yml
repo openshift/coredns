@@ -10,9 +10,11 @@ linters:
     - canonicalheader
     - copyloopvar
     - durationcheck
+    - godoclint
     - govet
     - ineffassign
     - intrange
+    - modernize
     - nakedret
     - nolintlint
     - perfsprint
