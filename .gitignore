@@ -4,5 +4,5 @@ Corefile
 /coredns
 coredns.exe
 Corefile
-build/
+/build/
 release/
