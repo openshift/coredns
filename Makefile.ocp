@@ -1,0 +1,97 @@
+# Makefile.ocp — OpenShift plugin management for CoreDNS
+#
+# Usage:
+#   make -f Makefile.ocp generate-plugins   # prune plugins and regenerate
+#   make -f Makefile.ocp verify-plugins     # CI check: fail if tree is dirty
+#
+# After an upstream rebase:
+#   1. (Optional) Add new plugins to openshift-plugins.cfg if needed
+#   2. Run: make -f Makefile.ocp generate-plugins
+#   3. Commit the result
+
+OPENSHIFT_PLUGINS_CFG := openshift-plugins.cfg
+PLUGIN_CFG := plugin.cfg
+PLUGIN_DIR := plugin
+
+# Infrastructure directories under plugin/ that are never plugins.
+INFRA_DIRS := pkg test deprecated import
+
+# Plugin directories that are NOT registered in openshift-plugins.cfg but
+# are imported as code dependencies by kept plugins. Update this list if
+# a kept plugin gains a new cross-plugin import after an upstream rebase.
+#
+# debug      — imported by forward
+# dnstap     — imported by forward
+# etcd       — etcd/msg imported by kubernetes
+# metadata   — imported by cache, kubernetes, forward
+# transfer   — imported by kubernetes
+# whoami     — imported by bufsize (tests)
+# erratic    — imported by ready (tests)
+DEP_DIRS := debug dnstap etcd metadata transfer whoami erratic
+
+.PHONY: generate-plugins
+generate-plugins:
+	@echo "==> Overwriting $(PLUGIN_CFG) with $(OPENSHIFT_PLUGINS_CFG)"
+	cp $(OPENSHIFT_PLUGINS_CFG) $(PLUGIN_CFG)
+	@echo "==> Removing unused plugin directories"
+	@$(call remove-unused-plugins)
+	@echo "==> Regenerating plugin Go files"
+	go generate coredns.go
+	@echo "==> Tidying modules"
+	go mod tidy
+	@echo "==> Vendoring dependencies"
+	go mod vendor
+	@echo "==> Done. Review changes with 'git diff --stat'"
+
+.PHONY: verify-plugins
+verify-plugins:
+	@echo "==> Verifying plugin tree matches $(OPENSHIFT_PLUGINS_CFG)"
+	@diff -q $(OPENSHIFT_PLUGINS_CFG) $(PLUGIN_CFG) || \
+		(echo "ERROR: $(PLUGIN_CFG) does not match $(OPENSHIFT_PLUGINS_CFG)"; exit 1)
+	@$(call check-no-unused-plugins)
+	@echo "==> Plugin tree is clean"
+
+# All directories that must be preserved: infrastructure, active plugins
+# (from openshift-plugins.cfg), and code-dependency plugins (DEP_DIRS).
+define kept-plugin-dirs
+$$(grep -v '^\s*#' $(OPENSHIFT_PLUGINS_CFG) | grep -v '^\s*$$' | cut -d: -f2 | grep -v '/')
+endef
+
+# remove-unused-plugins deletes plugin/<name>/ directories not in the
+# kept set (active plugins + DEP_DIRS + INFRA_DIRS).
+define remove-unused-plugins
+	kept=$(kept-plugin-dirs); \
+	for dir in $(PLUGIN_DIR)/*/; do \
+		name=$$(basename "$$dir"); \
+		skip=false; \
+		for s in $(INFRA_DIRS) $(DEP_DIRS); do \
+			if [ "$$name" = "$$s" ]; then skip=true; break; fi; \
+		done; \
+		if $$skip; then continue; fi; \
+		if echo "$$kept" | grep -qx "$$name"; then continue; fi; \
+		echo "  removing $(PLUGIN_DIR)/$$name"; \
+		rm -rf "$$dir"; \
+	done
+endef
+
+# check-no-unused-plugins fails if any plugin directories exist that
+# should have been removed.
+define check-no-unused-plugins
+	kept=$(kept-plugin-dirs); \
+	stale=""; \
+	for dir in $(PLUGIN_DIR)/*/; do \
+		name=$$(basename "$$dir"); \
+		skip=false; \
+		for s in $(INFRA_DIRS) $(DEP_DIRS); do \
+			if [ "$$name" = "$$s" ]; then skip=true; break; fi; \
+		done; \
+		if $$skip; then continue; fi; \
+		if echo "$$kept" | grep -qx "$$name"; then continue; fi; \
+		stale="$$stale $$name"; \
+	done; \
+	if [ -n "$$stale" ]; then \
+		echo "ERROR: unused plugin directories found:$$stale"; \
+		echo "Run 'make -f Makefile.ocp generate-plugins' to fix."; \
+		exit 1; \
+	fi
+endef
