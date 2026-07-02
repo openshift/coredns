@@ -1,6 +1,7 @@
 package tls
 
 import (
+	"crypto/tls"
 	"path/filepath"
 	"testing"
 
@@ -97,6 +98,40 @@ func TestNewTLSConfigFromArgsWithRoot(t *testing.T) {
 	}
 	if len(c.Certificates) != 1 {
 		t.Error("Certificates should have a single entry when three args passed")
+	}
+}
+
+func TestSetTLSDefaults(t *testing.T) {
+	cert, key, ca := getPEMFiles(t)
+
+	c, err := NewTLSConfig(cert, key, ca)
+	if err != nil {
+		t.Fatalf("Failed to create TLSConfig: %s", err)
+	}
+
+	if c.MinVersion != tls.VersionTLS12 {
+		t.Errorf("Expected MinVersion to be TLS 1.2, got %d", c.MinVersion)
+	}
+	if c.MaxVersion != tls.VersionTLS13 {
+		t.Errorf("Expected MaxVersion to be TLS 1.3, got %d", c.MaxVersion)
+	}
+	if len(c.CipherSuites) != 6 {
+		t.Errorf("Expected 6 CipherSuites, got %d", len(c.CipherSuites))
+	}
+
+	expectedCurves := []tls.CurveID{
+		tls.X25519MLKEM768,
+		tls.X25519,
+		tls.CurveP256,
+		tls.CurveP384,
+	}
+	if len(c.CurvePreferences) != len(expectedCurves) {
+		t.Fatalf("Expected %d CurvePreferences, got %d", len(expectedCurves), len(c.CurvePreferences))
+	}
+	for i, curve := range expectedCurves {
+		if c.CurvePreferences[i] != curve {
+			t.Errorf("CurvePreferences[%d] = %v, want %v", i, c.CurvePreferences[i], curve)
+		}
 	}
 }
 
