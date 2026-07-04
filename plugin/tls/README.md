@@ -35,6 +35,10 @@ The option value corresponds to the [ClientAuthType values of the Go tls package
 The default is "nocert".  Note that it makes no sense to specify parameter CA unless this option is
 set to verify\_if\_given or require\_and\_verify.
 
+CoreDNS sets the minimum TLS version to TLS 1.2. The maximum TLS version, TLS 1.2 cipher suites, and
+key exchange mechanisms use the Go `crypto/tls` defaults.
+
+
 ## Examples
 
 Start a DNS-over-TLS server that picks up incoming DNS-over-TLS queries on port 5553 and uses the
