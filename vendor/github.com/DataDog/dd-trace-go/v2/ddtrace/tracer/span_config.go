@@ -27,7 +27,7 @@ type StartSpanConfig struct {
 
 	// Tags holds a set of key/value pairs that should be set as metadata on the
 	// new span.
-	Tags map[string]interface{}
+	Tags map[string]any
 
 	// SpanID will be the SpanID of the Span, overriding the random number that would
 	// be generated. If no Parent SpanContext is present, then this will also set the
@@ -75,7 +75,7 @@ type FinishConfig struct {
 	SkipStackFrames uint
 }
 
-// NewFinishConfig allows to build a base finish config struct. It accepts the same options as Finish.
+// NewFinishConfig allows building a base finish config struct. It accepts the same options as Finish.
 // It's useful to reduce the number of operations in any hot path and update it for request/operation specifics.
 func NewFinishConfig(opts ...FinishOption) *FinishConfig {
 	cfg := new(FinishConfig)

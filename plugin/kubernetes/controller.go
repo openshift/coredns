@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -70,13 +71,13 @@ type dnsControl struct {
 	// modified tracks timestamp of the most recent changes
 	// It needs to be first because it is guaranteed to be 8-byte
 	// aligned ( we use sync.LoadAtomic with this )
-	modified int64
+	modified atomic.Int64
 	// multiClusterModified tracks timestamp of the most recent changes to
 	// multi cluster services
-	multiClusterModified int64
+	multiClusterModified atomic.Int64
 	// extModified tracks timestamp of the most recent changes to
 	// services with external facing IP addresses
-	extModified int64
+	extModified atomic.Int64
 
 	client    kubernetes.Interface
 	mcsClient mcsClientset.MulticlusterV1alpha1Interface
@@ -114,6 +115,10 @@ type dnsControlOpts struct {
 	initPodCache       bool
 	initEndpointsCache bool
 	ignoreEmptyService bool
+	// zonal enables the zone-scoped name grammar
+	// (topozone.pin|prefer._zone.service.namespace.svc.zone) for headless
+	// services.
+	zonal bool
 
 	// Label handling.
 	labelSelector          *meta.LabelSelector
@@ -140,10 +145,13 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, mcsC
 	}
 
 	dns.svcLister, dns.svcController = object.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc:  serviceListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-			WatchFunc: serviceWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-		},
+		cache.ToListWatcherWithWatchListSemantics(
+			&cache.ListWatch{
+				ListFunc:  serviceListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+				WatchFunc: serviceWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+			},
+			kubeClient,
+		),
 		&api.Service{},
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 		cache.Indexers{svcNameNamespaceIndex: svcNameNamespaceIndexFunc, svcIPIndex: svcIPIndexFunc, svcExtIPIndex: svcExtIPIndexFunc},
@@ -151,10 +159,13 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, mcsC
 	)
 
 	podLister, podController := object.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc:  podListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-			WatchFunc: podWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-		},
+		cache.ToListWatcherWithWatchListSemantics(
+			&cache.ListWatch{
+				ListFunc:  podListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+				WatchFunc: podWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+			},
+			kubeClient,
+		),
 		&api.Pod{},
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 		cache.Indexers{podIPIndex: podIPIndexFunc},
@@ -165,15 +176,22 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, mcsC
 		dns.podController = podController
 	}
 
+	epTransform := object.EndpointSliceToEndpoints
+	if opts.zonal {
+		epTransform = object.EndpointSliceToEndpointsWithZones
+	}
 	epLister, epController := object.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc:  endpointSliceListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-			WatchFunc: endpointSliceWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
-		},
+		cache.ToListWatcherWithWatchListSemantics(
+			&cache.ListWatch{
+				ListFunc:  endpointSliceListFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+				WatchFunc: endpointSliceWatchFunc(ctx, dns.client, api.NamespaceAll, dns.selector),
+			},
+			kubeClient,
+		),
 		&discovery.EndpointSlice{},
 		cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 		cache.Indexers{epNameNamespaceIndex: epNameNamespaceIndexFunc, epIPIndex: epIPIndexFunc},
-		object.DefaultProcessor(object.EndpointSliceToEndpoints, dns.EndpointSliceLatencyRecorder()),
+		object.DefaultProcessor(epTransform, dns.EndpointSliceLatencyRecorder()),
 	)
 	dns.epLister = epLister
 	if opts.initEndpointsCache {
@@ -181,10 +199,13 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, mcsC
 	}
 
 	dns.nsLister, dns.nsController = object.NewIndexerInformer(
-		&cache.ListWatch{
-			ListFunc:  namespaceListFunc(ctx, dns.client, dns.namespaceSelector),
-			WatchFunc: namespaceWatchFunc(ctx, dns.client, dns.namespaceSelector),
-		},
+		cache.ToListWatcherWithWatchListSemantics(
+			&cache.ListWatch{
+				ListFunc:  namespaceListFunc(ctx, dns.client, dns.namespaceSelector),
+				WatchFunc: namespaceWatchFunc(ctx, dns.client, dns.namespaceSelector),
+			},
+			kubeClient,
+		),
 		&api.Namespace{},
 		cache.ResourceEventHandlerFuncs{},
 		cache.Indexers{},
@@ -199,20 +220,26 @@ func newdnsController(ctx context.Context, kubeClient kubernetes.Interface, mcsC
 		}
 		mcsEpSelector = mcsEpSelector.Add(*mcsEpReq)
 		dns.mcEpLister, dns.mcEpController = object.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc:  endpointSliceListFunc(ctx, dns.client, api.NamespaceAll, mcsEpSelector),
-				WatchFunc: endpointSliceWatchFunc(ctx, dns.client, api.NamespaceAll, mcsEpSelector),
-			},
+			cache.ToListWatcherWithWatchListSemantics(
+				&cache.ListWatch{
+					ListFunc:  endpointSliceListFunc(ctx, dns.client, api.NamespaceAll, mcsEpSelector),
+					WatchFunc: endpointSliceWatchFunc(ctx, dns.client, api.NamespaceAll, mcsEpSelector),
+				},
+				kubeClient,
+			),
 			&discovery.EndpointSlice{},
 			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 			cache.Indexers{mcEpNameNamespaceIndex: mcEpNameNamespaceIndexFunc},
 			object.DefaultProcessor(object.EndpointSliceToMultiClusterEndpoints, dns.EndpointSliceLatencyRecorder()),
 		)
 		dns.svcImportLister, dns.svcImportController = object.NewIndexerInformer(
-			&cache.ListWatch{
-				ListFunc:  serviceImportListFunc(ctx, dns.mcsClient, api.NamespaceAll, dns.namespaceSelector),
-				WatchFunc: serviceImportWatchFunc(ctx, dns.mcsClient, api.NamespaceAll, dns.namespaceSelector),
-			},
+			cache.ToListWatcherWithWatchListSemantics(
+				&cache.ListWatch{
+					ListFunc:  serviceImportListFunc(ctx, dns.mcsClient, api.NamespaceAll, dns.namespaceSelector),
+					WatchFunc: serviceImportWatchFunc(ctx, dns.mcsClient, api.NamespaceAll, dns.namespaceSelector),
+				},
+				kubeClient,
+			),
 			&mcs.ServiceImport{},
 			cache.ResourceEventHandlerFuncs{AddFunc: dns.Add, UpdateFunc: dns.Update, DeleteFunc: dns.Delete},
 			cache.Indexers{svcImportNameNamespaceIndex: svcImportNameNamespaceIndexFunc},
@@ -467,6 +494,7 @@ func (dns *dnsControl) HasSynced() bool {
 
 func (dns *dnsControl) ServiceList() (svcs []*object.Service) {
 	os := dns.svcLister.List()
+	svcs = make([]*object.Service, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.Service)
 		if !ok {
@@ -479,6 +507,7 @@ func (dns *dnsControl) ServiceList() (svcs []*object.Service) {
 
 func (dns *dnsControl) ServiceImportList() (svcs []*object.ServiceImport) {
 	os := dns.svcImportLister.List()
+	svcs = make([]*object.ServiceImport, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.ServiceImport)
 		if !ok {
@@ -491,6 +520,7 @@ func (dns *dnsControl) ServiceImportList() (svcs []*object.ServiceImport) {
 
 func (dns *dnsControl) EndpointsList() (eps []*object.Endpoints) {
 	os := dns.epLister.List()
+	eps = make([]*object.Endpoints, 0, len(os))
 	for _, o := range os {
 		ep, ok := o.(*object.Endpoints)
 		if !ok {
@@ -506,6 +536,7 @@ func (dns *dnsControl) PodIndex(ip string) (pods []*object.Pod) {
 	if err != nil {
 		return nil
 	}
+	pods = make([]*object.Pod, 0, len(os))
 	for _, o := range os {
 		p, ok := o.(*object.Pod)
 		if !ok {
@@ -521,6 +552,7 @@ func (dns *dnsControl) SvcIndex(idx string) (svcs []*object.Service) {
 	if err != nil {
 		return nil
 	}
+	svcs = make([]*object.Service, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.Service)
 		if !ok {
@@ -536,7 +568,7 @@ func (dns *dnsControl) SvcIndexReverse(ip string) (svcs []*object.Service) {
 	if err != nil {
 		return nil
 	}
-
+	svcs = make([]*object.Service, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.Service)
 		if !ok {
@@ -552,7 +584,7 @@ func (dns *dnsControl) SvcExtIndexReverse(ip string) (svcs []*object.Service) {
 	if err != nil {
 		return nil
 	}
-
+	svcs = make([]*object.Service, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.Service)
 		if !ok {
@@ -568,6 +600,7 @@ func (dns *dnsControl) SvcImportIndex(idx string) (svcs []*object.ServiceImport)
 	if err != nil {
 		return nil
 	}
+	svcs = make([]*object.ServiceImport, 0, len(os))
 	for _, o := range os {
 		s, ok := o.(*object.ServiceImport)
 		if !ok {
@@ -583,6 +616,7 @@ func (dns *dnsControl) EpIndex(idx string) (ep []*object.Endpoints) {
 	if err != nil {
 		return nil
 	}
+	ep = make([]*object.Endpoints, 0, len(os))
 	for _, o := range os {
 		e, ok := o.(*object.Endpoints)
 		if !ok {
@@ -598,6 +632,7 @@ func (dns *dnsControl) EpIndexReverse(ip string) (ep []*object.Endpoints) {
 	if err != nil {
 		return nil
 	}
+	ep = make([]*object.Endpoints, 0, len(os))
 	for _, o := range os {
 		e, ok := o.(*object.Endpoints)
 		if !ok {
@@ -613,6 +648,7 @@ func (dns *dnsControl) McEpIndex(idx string) (ep []*object.MultiClusterEndpoints
 	if err != nil {
 		return nil
 	}
+	ep = make([]*object.MultiClusterEndpoints, 0, len(os))
 	for _, o := range os {
 		e, ok := o.(*object.MultiClusterEndpoints)
 		if !ok {
@@ -647,8 +683,8 @@ func (dns *dnsControl) GetNamespaceByName(name string) (*object.Namespace, error
 	return ns, nil
 }
 
-func (dns *dnsControl) Add(obj any)               { dns.updateModified() }
-func (dns *dnsControl) Delete(obj any)            { dns.updateModified() }
+func (dns *dnsControl) Add(_obj any)              { dns.updateModified() }
+func (dns *dnsControl) Delete(_obj any)           { dns.updateModified() }
 func (dns *dnsControl) Update(oldObj, newObj any) { dns.detectChanges(oldObj, newObj) }
 
 // detectChanges detects changes in objects, and updates the modified timestamp
@@ -675,7 +711,9 @@ func (dns *dnsControl) detectChanges(oldObj, newObj any) {
 			dns.updateMultiClusterModified()
 		}
 	case *object.Pod:
-		dns.updateModified()
+		if podModified(oldObj, newObj) {
+			dns.updateModified()
+		}
 	case *object.Endpoints:
 		if !endpointsEquivalent(oldObj.(*object.Endpoints), newObj.(*object.Endpoints)) {
 			dns.updateModified()
@@ -728,6 +766,19 @@ func subsetsEquivalent(sa, sb object.EndpointSubset) bool {
 	return true
 }
 
+// podModified checks if an update to a pod changes anything that is visible in
+// DNS. Pod records and the pod IP index only depend on the pod IP, so all
+// other pod status churn (conditions, container statuses, labels) does not
+// need to bump the zone serial.
+func podModified(oldObj, newObj any) bool {
+	oldPod, okOld := oldObj.(*object.Pod)
+	newPod, okNew := newObj.(*object.Pod)
+	if !okOld || !okNew {
+		return true
+	}
+	return oldPod.PodIP != newPod.PodIP
+}
+
 // endpointsEquivalent checks if the update to an endpoint is something
 // that matters to us or if they are effectively equivalent.
 func endpointsEquivalent(a, b *object.Endpoints) bool {
@@ -736,6 +787,13 @@ func endpointsEquivalent(a, b *object.Endpoints) bool {
 	}
 
 	if len(a.Subsets) != len(b.Subsets) {
+		return false
+	}
+
+	// Zones is nil unless the zonal option is on, so this is a no-op for
+	// default configurations — and with the option on, zone changes alter
+	// served answers and must bump the serial like any other change.
+	if !maps.Equal(a.Zones, b.Zones) {
 		return false
 	}
 
@@ -862,11 +920,11 @@ func serviceImportEquivalent(oldObj, newObj any) bool {
 func (dns *dnsControl) Modified(mode ModifiedMode) int64 {
 	switch mode {
 	case ModifiedInternal:
-		return atomic.LoadInt64(&dns.modified)
+		return dns.modified.Load()
 	case ModifiedExternal:
-		return atomic.LoadInt64(&dns.extModified)
+		return dns.extModified.Load()
 	case ModifiedMultiCluster:
-		return atomic.LoadInt64(&dns.multiClusterModified)
+		return dns.multiClusterModified.Load()
 	}
 	return -1
 }
@@ -874,19 +932,19 @@ func (dns *dnsControl) Modified(mode ModifiedMode) int64 {
 // updateModified set dns.modified to the current time.
 func (dns *dnsControl) updateModified() {
 	unix := time.Now().Unix()
-	atomic.StoreInt64(&dns.modified, unix)
+	dns.modified.Store(unix)
 }
 
 // updateMultiClusterModified set dns.modified to the current time.
 func (dns *dnsControl) updateMultiClusterModified() {
 	unix := time.Now().Unix()
-	atomic.StoreInt64(&dns.multiClusterModified, unix)
+	dns.multiClusterModified.Store(unix)
 }
 
 // updateExtModified set dns.extModified to the current time.
 func (dns *dnsControl) updateExtModified() {
 	unix := time.Now().Unix()
-	atomic.StoreInt64(&dns.extModified, unix)
+	dns.extModified.Store(unix)
 }
 
 var errObj = errors.New("obj was not of the correct type")

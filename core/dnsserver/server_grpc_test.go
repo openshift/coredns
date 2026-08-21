@@ -3,8 +3,10 @@ package dnsserver
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/coredns/coredns/pb"
 	"github.com/coredns/coredns/plugin/pkg/transport"
@@ -66,6 +68,61 @@ func TestNewServergRPCWithTLS(t *testing.T) {
 
 	if len(server.tlsConfig.NextProtos) == 0 || server.tlsConfig.NextProtos[0] != "h2" {
 		t.Error("Expected NextProtos to include h2 for gRPC")
+	}
+}
+
+func TestNewServergRPCWithCustomLimits(t *testing.T) {
+	config := testConfig("grpc", testPlugin{})
+	maxStreams := 50
+	maxConnections := 100
+	config.MaxGRPCStreams = &maxStreams
+	config.MaxGRPCConnections = &maxConnections
+
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{config})
+	if err != nil {
+		t.Fatalf("NewServergRPC() with custom limits failed: %v", err)
+	}
+
+	if server.maxStreams != maxStreams {
+		t.Errorf("Expected maxStreams = %d, got %d", maxStreams, server.maxStreams)
+	}
+
+	if server.maxConnections != maxConnections {
+		t.Errorf("Expected maxConnections = %d, got %d", maxConnections, server.maxConnections)
+	}
+}
+
+func TestNewServergRPCDefaults(t *testing.T) {
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{testConfig("grpc", testPlugin{})})
+	if err != nil {
+		t.Fatalf("NewServergRPC() failed: %v", err)
+	}
+
+	if server.maxStreams != DefaultGRPCMaxStreams {
+		t.Errorf("Expected default maxStreams = %d, got %d", DefaultGRPCMaxStreams, server.maxStreams)
+	}
+
+	if server.maxConnections != DefaultGRPCMaxConnections {
+		t.Errorf("Expected default maxConnections = %d, got %d", DefaultGRPCMaxConnections, server.maxConnections)
+	}
+}
+
+func TestNewServergRPCZeroLimits(t *testing.T) {
+	config := testConfig("grpc", testPlugin{})
+	zero := 0
+	config.MaxGRPCStreams = &zero
+	config.MaxGRPCConnections = &zero
+
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{config})
+	if err != nil {
+		t.Fatalf("NewServergRPC() with zero limits failed: %v", err)
+	}
+
+	if server.maxStreams != 0 {
+		t.Errorf("Expected maxStreams = 0, got %d", server.maxStreams)
+	}
+	if server.maxConnections != 0 {
+		t.Errorf("Expected maxConnections = 0, got %d", server.maxConnections)
 	}
 }
 
@@ -221,6 +278,31 @@ func TestServergRPC_Query(t *testing.T) {
 	}
 }
 
+func TestServergRPC_QueryRejectsUpdate(t *testing.T) {
+	handler := new(updateResponsePlugin)
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{
+		testConfig("grpc", handler),
+	})
+	if err != nil {
+		t.Fatalf("NewServergRPC() failed: %v", err)
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	if err != nil {
+		t.Fatalf("net.ResolveTCPAddr() failed: %v", err)
+	}
+	server.listenAddr = tcpAddr
+	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: tcpAddr})
+
+	_, err = server.Query(ctx, &pb.DnsPacket{Msg: mustPackRFC2136Update(t)})
+	if err == nil {
+		t.Fatal("Query() accepted an RFC 2136 UPDATE")
+	}
+	if handler.called.Load() {
+		t.Fatal("RFC 2136 UPDATE reached the plugin chain")
+	}
+}
+
 func TestServergRPC_Query_ErrorCases(t *testing.T) {
 	server, err := NewServergRPC("127.0.0.1:0", []*Config{testConfig("grpc", testPlugin{})})
 	if err != nil {
@@ -326,5 +408,238 @@ func TestGRPCResponse_WriteInvalidMessage(t *testing.T) {
 	_, err := r.Write([]byte("invalid dns message"))
 	if err == nil {
 		t.Error("Write() should return error for invalid DNS message")
+	}
+}
+
+func TestServergRPC_Query_LargeMessage(t *testing.T) {
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{testConfig("grpc", testPlugin{})})
+	if err != nil {
+		t.Fatalf("NewServergRPC failed: %v", err)
+	}
+
+	// Create oversized message (> dns.MaxMsgSize = 65535)
+	oversizedMsg := make([]byte, dns.MaxMsgSize+1)
+	dnsPacket := &pb.DnsPacket{Msg: oversizedMsg}
+
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	p := &peer.Peer{Addr: tcpAddr}
+	ctx := peer.NewContext(context.Background(), p)
+
+	server.listenAddr = tcpAddr
+
+	_, err = server.Query(ctx, dnsPacket)
+	if err == nil {
+		t.Error("Expected error for oversized message")
+	}
+
+	expectedError := "dns message exceeds size limit: 65536"
+	if err.Error() != expectedError {
+		t.Errorf("Expected error '%s', got '%s'", expectedError, err.Error())
+	}
+}
+
+func TestServergRPC_Query_MaxSizeMessage(t *testing.T) {
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{testConfig("grpc", testPlugin{})})
+	if err != nil {
+		t.Fatalf("NewServergRPC failed: %v", err)
+	}
+
+	// Create message exactly at the size limit (dns.MaxMsgSize = 65535)
+	msg := new(dns.Msg)
+	msg.SetQuestion("example.com.", dns.TypeA)
+	packed, err := msg.Pack()
+	if err != nil {
+		t.Fatalf("Failed to pack DNS message: %v", err)
+	}
+
+	// Pad the message to exactly max size
+	if len(packed) > dns.MaxMsgSize {
+		t.Fatalf("Packed message is already larger than max size: %d", len(packed))
+	}
+
+	maxSizeMsg := make([]byte, dns.MaxMsgSize)
+	copy(maxSizeMsg, packed)
+
+	dnsPacket := &pb.DnsPacket{Msg: maxSizeMsg}
+
+	tcpAddr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	p := &peer.Peer{Addr: tcpAddr}
+	ctx := peer.NewContext(context.Background(), p)
+
+	server.listenAddr = tcpAddr
+
+	// Should not return an error for exactly max size message
+	_, err = server.Query(ctx, dnsPacket)
+	if err != nil {
+		t.Errorf("Expected no error for max size message, got: %v", err)
+	}
+}
+
+func TestGRPCResponseTsigStatusReturnsStoredStatus(t *testing.T) {
+	want := errors.New("bad tsig")
+
+	r := &gRPCresponse{
+		tsigStatus: want,
+	}
+
+	if got := r.TsigStatus(); got != want {
+		t.Fatalf("TsigStatus() = %v, want %v", got, want)
+	}
+}
+
+func TestServergRPC_Query_TSIGBadSigSetsTsigStatus(t *testing.T) {
+	const keyName = "tsig-key."
+	const clientSecret = "MTIzNDU2Nzg5MDEyMzQ1Ng=="
+	const serverSecret = "QUJDREVGR0hJSktMTU5PUA=="
+
+	called := make(chan struct{}, 1)
+
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{
+		testConfig("grpc", tsigStatusCheckPlugin{
+			t:      t,
+			called: called,
+			check: func(t *testing.T, got error) {
+				t.Helper()
+				if got == nil {
+					t.Fatal("TsigStatus() = nil, want non-nil for bad TSIG MAC")
+				}
+				if errors.Is(got, dns.ErrSecret) {
+					t.Fatalf("TsigStatus() = %v, want signature verification error, not ErrSecret", got)
+				}
+				if errors.Is(got, dns.ErrTime) {
+					t.Fatalf("TsigStatus() = %v, want signature verification error, not ErrTime", got)
+				}
+			},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewServergRPC() failed: %v", err)
+	}
+
+	server.tsigSecret = map[string]string{
+		keyName: serverSecret,
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	if err != nil {
+		t.Fatalf("ResolveTCPAddr() failed: %v", err)
+	}
+	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: tcpAddr})
+	server.listenAddr = tcpAddr
+
+	wire := mustPackSignedTSIGQuery(t, keyName, clientSecret, time.Now().Unix())
+
+	_, err = server.Query(ctx, &pb.DnsPacket{Msg: wire})
+	if err != nil {
+		t.Fatalf("Query() failed: %v", err)
+	}
+
+	select {
+	case <-called:
+	default:
+		t.Fatal("ServeDNS() was not called")
+	}
+}
+
+func TestServergRPC_Query_TSIGBadTimeSetsTsigStatus(t *testing.T) {
+	const keyName = "tsig-key."
+	const secret = "MTIzNDU2Nzg5MDEyMzQ1Ng=="
+
+	called := make(chan struct{}, 1)
+
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{
+		testConfig("grpc", tsigStatusCheckPlugin{
+			t:      t,
+			called: called,
+			check: func(t *testing.T, got error) {
+				t.Helper()
+				if !errors.Is(got, dns.ErrTime) {
+					t.Fatalf("TsigStatus() = %v, want %v", got, dns.ErrTime)
+				}
+			},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewServergRPC() failed: %v", err)
+	}
+
+	server.tsigSecret = map[string]string{
+		keyName: secret,
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	if err != nil {
+		t.Fatalf("ResolveTCPAddr() failed: %v", err)
+	}
+	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: tcpAddr})
+	server.listenAddr = tcpAddr
+
+	wire := mustPackSignedTSIGQuery(t, keyName, secret, time.Now().Add(-10*time.Minute).Unix())
+
+	_, err = server.Query(ctx, &pb.DnsPacket{Msg: wire})
+	if err != nil {
+		t.Fatalf("Query() failed: %v", err)
+	}
+
+	select {
+	case <-called:
+	default:
+		t.Fatal("ServeDNS() was not called")
+	}
+}
+
+func TestServergRPC_Query_TSIGValidLeavesTsigStatusNil(t *testing.T) {
+	const keyName = "tsig-key."
+	const secret = "MTIzNDU2Nzg5MDEyMzQ1Ng=="
+
+	called := make(chan struct{}, 1)
+
+	server, err := NewServergRPC("127.0.0.1:0", []*Config{
+		testConfig("grpc", tsigStatusCheckPlugin{
+			t:      t,
+			called: called,
+			check: func(t *testing.T, got error) {
+				t.Helper()
+				if got != nil {
+					t.Fatalf("TsigStatus() = %v, want nil", got)
+				}
+			},
+		}),
+	})
+	if err != nil {
+		t.Fatalf("NewServergRPC() failed: %v", err)
+	}
+
+	server.tsigSecret = map[string]string{
+		keyName: secret,
+	}
+
+	tcpAddr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:12345")
+	if err != nil {
+		t.Fatalf("ResolveTCPAddr() failed: %v", err)
+	}
+	ctx := peer.NewContext(context.Background(), &peer.Peer{Addr: tcpAddr})
+	server.listenAddr = tcpAddr
+
+	wire := mustPackSignedTSIGQuery(t, keyName, secret, time.Now().Unix())
+
+	resp, err := server.Query(ctx, &pb.DnsPacket{Msg: wire})
+	if err != nil {
+		t.Fatalf("Query() failed: %v", err)
+	}
+
+	select {
+	case <-called:
+	default:
+		t.Fatal("ServeDNS() was not called")
+	}
+
+	if len(resp.GetMsg()) == 0 {
+		t.Fatal("Query() returned empty message")
+	}
+
+	respMsg := new(dns.Msg)
+	if err := respMsg.Unpack(resp.GetMsg()); err != nil {
+		t.Fatalf("Failed to unpack response message: %v", err)
 	}
 }

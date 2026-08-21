@@ -6,10 +6,10 @@ package tracer
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/stableconfig"
 	"github.com/DataDog/dd-trace-go/v2/internal/telemetry"
@@ -93,7 +93,8 @@ var propagationMapping = map[string]string{
 func getDDorOtelConfig(configName string) string {
 	config, ok := otelDDConfigs[configName]
 	if !ok {
-		panic(fmt.Sprintf("Programming Error: %v not found in supported configurations", configName))
+		log.Debug("Programming Error: %s not found in supported configurations", configName)
+		return ""
 	}
 
 	// 1. Check managed stable config if handsOff
@@ -105,9 +106,9 @@ func getDDorOtelConfig(configName string) string {
 	}
 
 	// 2. Check environment variables (DD or OT)
-	val := os.Getenv(config.dd)
+	val := env.Get(config.dd)
 	key := config.dd // Store the environment variable that will be used to set the config
-	if otVal := os.Getenv(config.ot); otVal != "" {
+	if otVal := env.Get(config.ot); otVal != "" {
 		ddPrefix := "config_datadog:"
 		otelPrefix := "config_opentelemetry:"
 		if val != "" {
@@ -195,7 +196,7 @@ func mapEnabled(ot string) (string, error) {
 
 // mapSampleRate maps OTEL_TRACES_SAMPLER to DD_TRACE_SAMPLE_RATE
 func otelTraceIDRatio() string {
-	if v := os.Getenv("OTEL_TRACES_SAMPLER_ARG"); v != "" {
+	if v := env.Get("OTEL_TRACES_SAMPLER_ARG"); v != "" {
 		return v
 	}
 	return "1.0"
@@ -224,7 +225,7 @@ func mapSampleRate(ot string) (string, error) {
 func mapPropagationStyle(ot string) (string, error) {
 	ot = strings.TrimSpace(strings.ToLower(ot))
 	supportedStyles := make([]string, 0)
-	for _, otStyle := range strings.Split(ot, ",") {
+	for otStyle := range strings.SplitSeq(ot, ",") {
 		otStyle = strings.TrimSpace(otStyle)
 		if _, ok := propagationMapping[otStyle]; ok {
 			supportedStyles = append(supportedStyles, propagationMapping[otStyle])

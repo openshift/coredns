@@ -1,17 +1,17 @@
 approvers:
   - knobunc
+  - smarterclayton
+  - ironcladlou
+  - danehans
   - Miciah
   - frobware
+  - sgreene570
   - candita
   - rfredette
   - alebedev87
   - gcs278
   - rikatz
   - bentito
-  - Thealisyed
-  - grzpiotrowski
-  - davidesalerno
-  - aswinsuryan
 
 component: DNS
 

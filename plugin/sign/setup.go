@@ -62,8 +62,8 @@ func parse(c *caddy.Controller) (*Sign, error) {
 			signers[i] = &Signer{
 				dbfile:      dbfile,
 				origin:      origins[i],
-				jitterIncep: time.Duration(float32(durationInceptionJitter) * rand.Float32()),
-				jitterExpir: time.Duration(float32(durationExpirationDayJitter) * rand.Float32()),
+				jitterIncep: time.Duration(float32(durationInceptionJitter) * rand.Float32()),     // #nosec G404 -- non-cryptographic jitter.
+				jitterExpir: time.Duration(float32(durationExpirationDayJitter) * rand.Float32()), // #nosec G404 -- non-cryptographic jitter.
 				directory:   "/var/lib/coredns",
 				stop:        make(chan struct{}),
 				signedfile:  fmt.Sprintf("db.%ssigned", origins[i]), // origins[i] is a fqdn, so it ends with a dot, hence %ssigned.

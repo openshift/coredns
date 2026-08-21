@@ -2,6 +2,8 @@ package test
 
 import (
 	"testing"
+
+	"github.com/miekg/dns"
 )
 
 // TestCorefileParsing tests the Corefile parsing functionality.
@@ -25,6 +27,22 @@ acl
 				"hosts#\x90\xD0{lc\x0C{\n" +
 				"'{mport\xEF1\x0C}\x0B''",
 		},
+		{
+			// A kubernetes endpoint URL with invalid UTF-8 caused a
+			// panic in Prometheus WithLabelValues.
+			// See OSS-Fuzz issue: https://issues.oss-fuzz.com/issues/498472468
+			name: "FuzzCore_InvalidUTF8InKubernetesEndpoint",
+			corefile: "\xf6\xe6*S65558::65535\n" +
+				"kubernetes idd\x0cd\xc8:0\x00,\x13" +
+				"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xfd" +
+				"\x00\x00\x00\x00\x00\x00\x00-\x00\x00\x00\x00" +
+				"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+				"\t{\tendpoint m\xff\xff\xff\xff\xff\xff\xff\xff\xff" +
+				"\xff\xff\xff\xffFFFFFF%FFFFFFFF\xff\xff\xff\xff\xff" +
+				"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" +
+				"\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff" +
+				"\xff\xff\tuil{ticll{ticl\x00,1:*\x0cd}\x0c}",
+		},
 	}
 
 	for _, tc := range cases {
@@ -43,5 +61,25 @@ acl
 				}
 			}()
 		})
+	}
+}
+
+func TestUppercaseServerBlockZone(t *testing.T) {
+	instance, udp, _, err := CoreDNSServerAndPorts(`EXAMPLE.ORG.:0 {
+	whoami
+}`)
+	if err != nil {
+		t.Fatalf("failed to start CoreDNS: %v", err)
+	}
+	defer CoreDNSServerStop(instance)
+
+	query := new(dns.Msg)
+	query.SetQuestion("www.example.org.", dns.TypeA)
+	response, _, err := new(dns.Client).Exchange(query, udp)
+	if err != nil {
+		t.Fatalf("DNS exchange failed: %v", err)
+	}
+	if response.Rcode != dns.RcodeSuccess {
+		t.Fatalf("expected response code %s, got %s", dns.RcodeToString[dns.RcodeSuccess], dns.RcodeToString[response.Rcode])
 	}
 }
