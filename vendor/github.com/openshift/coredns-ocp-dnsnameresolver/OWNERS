@@ -9,6 +9,8 @@ reviewers:
   - danwinship
   - npinaeva 
   - arkadeepsen
+  - davidesalerno
+  - bentito
 approvers:
   - knobunc
   - Miciah
@@ -19,3 +21,5 @@ approvers:
   - gcs278
   - danwinship
   - arkadeepsen
+  - davidesalerno
+  - bentito

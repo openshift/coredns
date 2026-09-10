@@ -7,10 +7,10 @@ package internal
 
 import (
 	"net/url"
-	"os"
 	"runtime/debug"
 	"sync"
 
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 )
 
@@ -59,14 +59,14 @@ func updateAllTags(tags map[string]string, newtags map[string]string) {
 // Get git metadata from environment variables
 func getTagsFromEnv() map[string]string {
 	return map[string]string{
-		TagRepositoryURL: removeCredentials(os.Getenv(EnvGitRepositoryURL)),
-		TagCommitSha:     os.Getenv(EnvGitCommitSha),
+		TagRepositoryURL: removeCredentials(env.Get(EnvGitRepositoryURL)),
+		TagCommitSha:     env.Get(EnvGitCommitSha),
 	}
 }
 
 // Get git metadata from DD_TAGS
 func getTagsFromDDTags() map[string]string {
-	etags := ParseTagString(os.Getenv(EnvDDTags))
+	etags := ParseTagString(env.Get(EnvDDTags))
 
 	return map[string]string{
 		TagRepositoryURL: removeCredentials(etags[TagRepositoryURL]),
@@ -129,19 +129,13 @@ func CleanGitMetadataTags(tags map[string]string) {
 	delete(tags, TagGoPath)
 }
 
-// GetTracerGitMetadataTags returns git metadata tags for tracer
-// NB: Currently tracer inject tags with some workaround
-// (only with _dd prefix and only for the first span in payload)
-// So we provide different tag names
-func GetTracerGitMetadataTags() map[string]string {
-	res := make(map[string]string)
-	tags := GetGitMetadataTags()
-
-	updateTags(res, TraceTagRepositoryURL, tags[TagRepositoryURL])
-	updateTags(res, TraceTagCommitSha, tags[TagCommitSha])
-	updateTags(res, TraceTagGoPath, tags[TagGoPath])
-
-	return res
+// TracerGitMetadataKeys maps canonical git metadata tag keys to their
+// _dd-prefixed tracer equivalents. The tracer injects these with a _dd
+// prefix because they are only attached to the first span in a payload.
+var TracerGitMetadataKeys = [3][2]string{
+	{TagRepositoryURL, TraceTagRepositoryURL},
+	{TagCommitSha, TraceTagCommitSha},
+	{TagGoPath, TraceTagGoPath},
 }
 
 // removeCredentials returns the passed url with potential credentials removed.

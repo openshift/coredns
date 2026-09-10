@@ -22,11 +22,11 @@ type fakeGCPClient struct {
 	*gcp.Service
 }
 
-func (c fakeGCPClient) zoneExists(projectName, hostedZoneName string) error {
+func (c fakeGCPClient) zoneExists(_projectName, _hostedZoneName string) error {
 	return nil
 }
 
-func (c fakeGCPClient) listRRSets(ctx context.Context, projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error) {
+func (c fakeGCPClient) listRRSets(_ctx context.Context, projectName, hostedZoneName string) (*gcp.ResourceRecordSetsListResponse, error) {
 	if projectName == "bad-project" || hostedZoneName == "bad-zone" {
 		return nil, errors.New("the 'parameters.managedZone' resource named 'bad-zone' does not exist")
 	}
@@ -148,7 +148,7 @@ func TestCloudDNS(t *testing.T) {
 	}
 	r.Fall = fall.Zero
 	r.Fall.SetZonesFromArgs([]string{"gov."})
-	r.Next = test.HandlerFunc(func(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+	r.Next = test.HandlerFunc(func(_ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 		state := request.Request{W: w, Req: r}
 		qname := state.Name()
 		m := new(dns.Msg)
@@ -318,7 +318,7 @@ func TestCloudDNS(t *testing.T) {
 			for i, ns := range rec.Msg.Ns {
 				got, ok := ns.(*dns.SOA)
 				if !ok {
-					t.Errorf("Test %d: Unexpected NS type. Want: SOA, got: %v", ti, reflect.TypeOf(got))
+					t.Errorf("Test %d: Unexpected NS type. Want: SOA, got: %v", ti, reflect.TypeFor[*dns.SOA]())
 				}
 				if got.String() != tc.wantNS[i] {
 					t.Errorf("Test %d: Unexpected NS.\nWant: %v\nGot: %v", ti, tc.wantNS[i], got)
@@ -363,13 +363,11 @@ func TestCloudDNSConcurrentServeDNS(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// Concurrently refresh zones to race with Lookup reads.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for range 50 {
 			_ = r.updateZones(ctx)
 		}
-	}()
+	})
 
 	const workers = 32
 	const iterations = 200

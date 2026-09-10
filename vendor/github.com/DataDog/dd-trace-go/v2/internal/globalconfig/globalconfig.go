@@ -13,14 +13,32 @@ import (
 	"sync"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 
 	"github.com/google/uuid"
 )
 
-var cfg = &config{
-	analyticsRate: math.NaN(),
-	runtimeID:     uuid.New().String(),
-	headersAsTags: internal.NewLockMap(map[string]string{}),
+const rootSessionIDEnvVar = "_DD_ROOT_GO_SESSION_ID"
+
+var cfg = newConfig()
+
+func newConfig() *config {
+	runtimeID := uuid.New().String()
+	return &config{
+		analyticsRate: math.NaN(),
+		runtimeID:     runtimeID,
+		rootSessionID: getRootSessionID(runtimeID),
+		headersAsTags: internal.NewLockMap(map[string]string{}),
+	}
+}
+
+func getRootSessionID(runtimeID string) string {
+	id := env.Get(rootSessionIDEnvVar)
+	if id == "" {
+		id = runtimeID
+	}
+	os.Setenv(rootSessionIDEnvVar, id) // propagate to child processes
+	return id
 }
 
 type config struct {
@@ -28,6 +46,7 @@ type config struct {
 	analyticsRate float64
 	serviceName   string
 	runtimeID     string
+	rootSessionID string
 	headersAsTags *internal.LockMap
 	dogstatsdAddr string
 	statsTags     []string
@@ -105,6 +124,13 @@ func RuntimeID() string {
 	return cfg.runtimeID
 }
 
+// RootSessionID returns the root session ID for this process tree.
+func RootSessionID() string {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	return cfg.rootSessionID
+}
+
 // HeaderTagMap returns the mappings of headers to their tag values
 func HeaderTagMap() *internal.LockMap {
 	return cfg.headersAsTags
@@ -134,15 +160,15 @@ func ClearHeaderTags() {
 
 // InstrumentationInstallID returns the install ID as described in DD_INSTRUMENTATION_INSTALL_ID
 func InstrumentationInstallID() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_ID")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_ID")
 }
 
 // InstrumentationInstallType returns the install type as described in DD_INSTRUMENTATION_INSTALL_TYPE
 func InstrumentationInstallType() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TYPE")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_TYPE")
 }
 
 // InstrumentationInstallTime returns the install time as described in DD_INSTRUMENTATION_INSTALL_TIME
 func InstrumentationInstallTime() string {
-	return os.Getenv("DD_INSTRUMENTATION_INSTALL_TIME")
+	return env.Get("DD_INSTRUMENTATION_INSTALL_TIME")
 }

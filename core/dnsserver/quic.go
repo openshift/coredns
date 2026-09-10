@@ -1,6 +1,7 @@
 package dnsserver
 
 import (
+	"crypto/tls"
 	"encoding/binary"
 	"errors"
 	"net"
@@ -13,7 +14,9 @@ type DoQWriter struct {
 	localAddr  net.Addr
 	remoteAddr net.Addr
 	stream     *quic.Stream
+	conn       *quic.Conn
 	Msg        *dns.Msg
+	tsigStatus error
 }
 
 func (w *DoQWriter) Write(b []byte) (int, error) {
@@ -53,16 +56,29 @@ func (w *DoQWriter) Close() error {
 // AddPrefix adds a 2-byte prefix with the DNS message length.
 func AddPrefix(b []byte) (m []byte) {
 	m = make([]byte, 2+len(b))
-	binary.BigEndian.PutUint16(m, uint16(len(b)))
+	binary.BigEndian.PutUint16(m, uint16(len(b))) // #nosec G115 -- DNS message length fits in uint16
 	copy(m[2:], b)
 
 	return m
 }
 
 // These methods implement the dns.ResponseWriter interface from Go DNS.
-func (w *DoQWriter) TsigStatus() error     { return nil }
-func (w *DoQWriter) TsigTimersOnly(b bool) {}
-func (w *DoQWriter) Hijack()               {}
-func (w *DoQWriter) LocalAddr() net.Addr   { return w.localAddr }
-func (w *DoQWriter) RemoteAddr() net.Addr  { return w.remoteAddr }
-func (w *DoQWriter) Network() string       { return "" }
+
+func (w *DoQWriter) TsigStatus() error      { return w.tsigStatus }
+func (w *DoQWriter) TsigTimersOnly(_b bool) {}
+func (w *DoQWriter) Hijack()                {}
+func (w *DoQWriter) LocalAddr() net.Addr    { return w.localAddr }
+func (w *DoQWriter) RemoteAddr() net.Addr   { return w.remoteAddr }
+func (w *DoQWriter) Network() string        { return "" }
+
+// ConnectionState implements the dns.ConnectionStater interface, exposing the
+// TLS state of the underlying QUIC connection (e.g. for plugins that need to
+// read the SNI ServerName). Mirrors the DoT behavior already provided by the
+// miekg/dns response writer.
+func (w *DoQWriter) ConnectionState() *tls.ConnectionState {
+	if w.conn == nil {
+		return nil
+	}
+	state := w.conn.ConnectionState().TLS
+	return &state
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
 	"github.com/miekg/dns"
+	"github.com/pires/go-proxyproto"
 )
 
 // ServerTLS represents an instance of a TLS-over-DNS-server.
@@ -53,7 +54,8 @@ func (s *ServerTLS) Serve(l net.Listener) error {
 	// Only fill out the TCP server for this one.
 	s.server[tcp] = &dns.Server{Listener: l,
 		Net:           "tcp-tls",
-		MaxTCPQueries: tlsMaxQueries,
+		TsigSecret:    s.tsigSecret,
+		MaxTCPQueries: s.MaxTCPQueries,
 		ReadTimeout:   s.ReadTimeout,
 		WriteTimeout:  s.WriteTimeout,
 		IdleTimeout: func() time.Duration {
@@ -71,13 +73,16 @@ func (s *ServerTLS) Serve(l net.Listener) error {
 }
 
 // ServePacket implements caddy.UDPServer interface.
-func (s *ServerTLS) ServePacket(p net.PacketConn) error { return nil }
+func (s *ServerTLS) ServePacket(_p net.PacketConn) error { return nil }
 
 // Listen implements caddy.TCPServer interface.
 func (s *ServerTLS) Listen() (net.Listener, error) {
 	l, err := reuseport.Listen("tcp", s.Addr[len(transport.TLS+"://"):])
 	if err != nil {
 		return nil, err
+	}
+	if s.connPolicy != nil {
+		l = &proxyproto.Listener{Listener: l, ConnPolicy: s.connPolicy}
 	}
 	return l, nil
 }
@@ -97,7 +102,3 @@ func (s *ServerTLS) OnStartupComplete() {
 		fmt.Print(out)
 	}
 }
-
-const (
-	tlsMaxQueries = -1
-)
