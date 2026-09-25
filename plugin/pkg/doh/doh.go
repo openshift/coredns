@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
+
 	"github.com/miekg/dns"
 )
 
@@ -92,7 +94,11 @@ func RequestToMsg(req *http.Request) (*dns.Msg, error) {
 // requestToMsgPost extracts the dns message from the request body.
 func requestToMsgPost(req *http.Request) (*dns.Msg, error) {
 	defer req.Body.Close()
-	return toMsg(req.Body)
+	buf, err := io.ReadAll(http.MaxBytesReader(nil, req.Body, 65536))
+	if err != nil {
+		return nil, err
+	}
+	return dnsutil.UnpackRequest(buf)
 }
 
 // requestToMsgGet extract the dns message from the GET request.
@@ -124,10 +130,7 @@ func base64ToMsg(b64 string) (*dns.Msg, error) {
 		return nil, err
 	}
 
-	m := new(dns.Msg)
-	err = m.Unpack(buf)
-
-	return m, err
+	return dnsutil.UnpackRequest(buf)
 }
 
 var b64Enc = base64.RawURLEncoding

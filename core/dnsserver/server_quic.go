@@ -10,6 +10,7 @@ import (
 	"net"
 
 	"github.com/coredns/coredns/plugin/metrics/vars"
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
@@ -176,8 +177,7 @@ func (s *ServerQUIC) serveQUICStream(stream *quic.Stream, conn *quic.Conn) {
 		return
 	}
 
-	req := &dns.Msg{}
-	err = req.Unpack(buf)
+	req, err := dnsutil.UnpackRequest(buf)
 	if err != nil {
 		clog.Debugf("unpacking quic packet: %s", err)
 		s.closeQUICConn(conn, DoQCodeProtocolError)

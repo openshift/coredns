@@ -9,6 +9,7 @@ import (
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/pb"
+	"github.com/coredns/coredns/plugin/pkg/dnsutil"
 	"github.com/coredns/coredns/plugin/pkg/reuseport"
 	"github.com/coredns/coredns/plugin/pkg/transport"
 
@@ -122,8 +123,7 @@ func (s *ServergRPC) Stop() (err error) {
 // any normal server. We use a custom responseWriter to pick up the bytes we need to write
 // back to the client as a protobuf.
 func (s *ServergRPC) Query(ctx context.Context, in *pb.DnsPacket) (*pb.DnsPacket, error) {
-	msg := new(dns.Msg)
-	err := msg.Unpack(in.GetMsg())
+	msg, err := dnsutil.UnpackRequest(in.GetMsg())
 	if err != nil {
 		return nil, err
 	}
