@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"path"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -94,11 +95,15 @@ type testServiceClient struct {
 	err       error
 }
 
-func (m testServiceClient) Query(ctx context.Context, in *pb.DnsPacket, opts ...grpc.CallOption) (*pb.DnsPacket, error) {
+func (m testServiceClient) Query(_ctx context.Context, _in *pb.DnsPacket, _opts ...grpc.CallOption) (*pb.DnsPacket, error) {
 	return m.dnsPacket, m.err
 }
 
 func TestProxyUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unix domain sockets are not supported on windows")
+	}
+
 	tdir := t.TempDir()
 
 	fd := path.Join(tdir, "test.grpc")
@@ -137,7 +142,7 @@ type grpcDnsServiceServer struct {
 	pb.UnimplementedDnsServiceServer
 }
 
-func (*grpcDnsServiceServer) Query(ctx context.Context, in *pb.DnsPacket) (*pb.DnsPacket, error) {
+func (*grpcDnsServiceServer) Query(_ctx context.Context, in *pb.DnsPacket) (*pb.DnsPacket, error) {
 	msg := &dns.Msg{}
 	msg.Unpack(in.GetMsg())
 	answer := new(dns.Msg)

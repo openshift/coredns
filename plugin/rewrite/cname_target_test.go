@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/coredns/coredns/plugin"
@@ -16,7 +17,7 @@ import (
 
 type MockedUpstream struct{}
 
-func (u *MockedUpstream) Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error) {
+func (u *MockedUpstream) Lookup(_ctx context.Context, state request.Request, _name string, _typ uint16) (*dns.Msg, error) {
 	m := new(dns.Msg)
 	m.SetReply(state.Req)
 	m.Authoritative = true
@@ -60,23 +61,30 @@ func (u *MockedUpstream) Lookup(ctx context.Context, state request.Request, name
 		}
 		m.Truncated = true
 		return m, nil
+	case "intermediate-2.staging.":
+		m.Answer = []dns.RR{
+			test.CNAME("intermediate-2.staging.   200  IN  CNAME  final.staging.net."),
+			test.A("final.staging.net.  120  IN  A  5.6.7.8"),
+		}
+		return m, nil
 	}
 	return &dns.Msg{}, nil
 }
 
 func TestCNameTargetRewrite(t *testing.T) {
-	rules := []Rule{}
 	ruleset := []struct {
 		args         []string
 		expectedType reflect.Type
 	}{
-		{[]string{"continue", "cname", "exact", "def.example.com.", "xyz.example.com."}, reflect.TypeOf(&cnameTargetRule{})},
-		{[]string{"continue", "cname", "prefix", "chat.openai.com", "bard.google.com"}, reflect.TypeOf(&cnameTargetRule{})},
-		{[]string{"continue", "cname", "suffix", "uvw.", "xyz."}, reflect.TypeOf(&cnameTargetRule{})},
-		{[]string{"continue", "cname", "substring", "efgh", "zzzz.www"}, reflect.TypeOf(&cnameTargetRule{})},
-		{[]string{"continue", "cname", "regex", `(.*)\.web\.(.*)\.site\.`, `{1}.webapp.{2}.org.`}, reflect.TypeOf(&cnameTargetRule{})},
-		{[]string{"continue", "cname", "exact", "music.truncated.spotify.com.", "music.truncated.spotify.com."}, reflect.TypeOf(&cnameTargetRule{})},
+		{[]string{"continue", "cname", "exact", "def.example.com", "xyz.example.com"}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "prefix", "chat.openai.com", "bard.google.com"}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "suffix", "uvw.", "xyz."}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "substring", "efgh", "zzzz.www"}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "regex", `(.*)\.web\.(.*)\.site\.`, `{1}.webapp.{2}.org.`}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "exact", "music.truncated.spotify.com.", "music.truncated.spotify.com."}, reflect.TypeFor[*cnameTargetRule]()},
+		{[]string{"continue", "cname", "suffix", "prod.", "staging."}, reflect.TypeFor[*cnameTargetRule]()},
 	}
+	rules := make([]Rule, 0, len(ruleset))
 	for i, r := range ruleset {
 		rule, err := newRule(r.args...)
 		if err != nil {
@@ -179,6 +187,21 @@ func doTestCNameTargetTests(t *testing.T, rules []Rule) {
 			},
 			true,
 		},
+		{"cname-chain.org.", dns.TypeA,
+			[]dns.RR{
+				test.CNAME("cname-chain.org.   200  IN  CNAME  intermediate-1.com"),
+				test.CNAME("intermediate-1.com   200  IN  CNAME  intermediate-2.prod."),
+				test.CNAME("intermediate-2.prod.   200  IN  CNAME  final.prod.net."),
+				test.A("final.prod.net.  120  IN  A  1.2.3.4"),
+			},
+			[]dns.RR{
+				test.CNAME("cname-chain.org.  200   IN  CNAME  intermediate-1.com"),
+				test.CNAME("intermediate-1.com   200  IN  CNAME  intermediate-2.staging."),
+				test.CNAME("intermediate-2.staging.   200  IN  CNAME  final.staging.net."),
+				test.A("final.staging.net.  120  IN  A  5.6.7.8"),
+			},
+			false,
+		},
 	}
 	ctx := context.TODO()
 	for i, tc := range tests {
@@ -212,14 +235,14 @@ func doTestCNameTargetTests(t *testing.T, rules []Rule) {
 // nilUpstream returns a nil message to simulate an upstream failure path.
 type nilUpstream struct{}
 
-func (f *nilUpstream) Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error) {
+func (f *nilUpstream) Lookup(_ctx context.Context, _state request.Request, _name string, _typ uint16) (*dns.Msg, error) {
 	return nil, nil
 }
 
 // errUpstream returns a nil message with an error to simulate an upstream failure path.
 type errUpstream struct{}
 
-func (f *errUpstream) Lookup(ctx context.Context, state request.Request, name string, typ uint16) (*dns.Msg, error) {
+func (f *errUpstream) Lookup(_ctx context.Context, _state request.Request, _name string, _typ uint16) (*dns.Msg, error) {
 	return nil, errors.New("upstream failure")
 }
 
@@ -261,5 +284,33 @@ func TestCNAMETargetRewrite_upstreamFailurePaths(t *testing.T) {
 				t.Errorf("Expected answer to be %q, but got %q", "bad.target.", finalTarget)
 			}
 		})
+	}
+}
+
+func TestNewCNAMERuleLargeRegex(t *testing.T) {
+	largeRegex := strings.Repeat("a", maxRegexpLen+1)
+	_, err := newCNAMERule("stop", "regex", largeRegex, "replacement")
+	if err == nil {
+		t.Fatal("Expected error for large regex, got nil")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("Expected 'too long' error, got: %v", err)
+	}
+}
+
+func TestNewCNAMERuleNormalization(t *testing.T) {
+	rule, err := newCNAMERule("stop", "exact", "newyork.foo.com", "vpce-123.amazonaws.com")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	cnameRule, ok := rule.(*cnameTargetRule)
+	if !ok {
+		t.Fatalf("expected *cnameTargetRule, got %T", rule)
+	}
+	if cnameRule.paramFromTarget != "newyork.foo.com." {
+		t.Errorf("expected fromTarget to be normalized to 'newyork.foo.com.', got %q", cnameRule.paramFromTarget)
+	}
+	if cnameRule.paramToTarget != "vpce-123.amazonaws.com." {
+		t.Errorf("expected toTarget to be normalized to 'vpce-123.amazonaws.com.', got %q", cnameRule.paramToTarget)
 	}
 }

@@ -2,6 +2,37 @@
 
 package types
 
+type AcceleratedRecoveryStatus string
+
+// Enum values for AcceleratedRecoveryStatus
+const (
+	AcceleratedRecoveryStatusEnabling                  AcceleratedRecoveryStatus = "ENABLING"
+	AcceleratedRecoveryStatusEnableFailed              AcceleratedRecoveryStatus = "ENABLE_FAILED"
+	AcceleratedRecoveryStatusEnablingHostedZoneLocked  AcceleratedRecoveryStatus = "ENABLING_HOSTED_ZONE_LOCKED"
+	AcceleratedRecoveryStatusEnabled                   AcceleratedRecoveryStatus = "ENABLED"
+	AcceleratedRecoveryStatusDisabling                 AcceleratedRecoveryStatus = "DISABLING"
+	AcceleratedRecoveryStatusDisableFailed             AcceleratedRecoveryStatus = "DISABLE_FAILED"
+	AcceleratedRecoveryStatusDisabled                  AcceleratedRecoveryStatus = "DISABLED"
+	AcceleratedRecoveryStatusDisablingHostedZoneLocked AcceleratedRecoveryStatus = "DISABLING_HOSTED_ZONE_LOCKED"
+)
+
+// Values returns all known values for AcceleratedRecoveryStatus. Note that this
+// can be expanded in the future, and so it is only as up to date as the client.
+//
+// The ordering of this slice is not guaranteed to be stable across updates.
+func (AcceleratedRecoveryStatus) Values() []AcceleratedRecoveryStatus {
+	return []AcceleratedRecoveryStatus{
+		"ENABLING",
+		"ENABLE_FAILED",
+		"ENABLING_HOSTED_ZONE_LOCKED",
+		"ENABLED",
+		"DISABLING",
+		"DISABLE_FAILED",
+		"DISABLED",
+		"DISABLING_HOSTED_ZONE_LOCKED",
+	}
+}
+
 type AccountLimitType string
 
 // Enum values for AccountLimitType
@@ -134,6 +165,8 @@ const (
 	CloudWatchRegionApEast2      CloudWatchRegion = "ap-east-2"
 	CloudWatchRegionEuIsoeWest1  CloudWatchRegion = "eu-isoe-west-1"
 	CloudWatchRegionApSoutheast6 CloudWatchRegion = "ap-southeast-6"
+	CloudWatchRegionUsIsobWest1  CloudWatchRegion = "us-isob-west-1"
+	CloudWatchRegionEuscDeEast1  CloudWatchRegion = "eusc-de-east-1"
 )
 
 // Values returns all known values for CloudWatchRegion. Note that this can be
@@ -186,6 +219,8 @@ func (CloudWatchRegion) Values() []CloudWatchRegion {
 		"ap-east-2",
 		"eu-isoe-west-1",
 		"ap-southeast-6",
+		"us-isob-west-1",
+		"eusc-de-east-1",
 	}
 }
 
@@ -416,6 +451,7 @@ const (
 	ResourceRecordSetRegionUsGovWest1   ResourceRecordSetRegion = "us-gov-west-1"
 	ResourceRecordSetRegionApEast2      ResourceRecordSetRegion = "ap-east-2"
 	ResourceRecordSetRegionApSoutheast6 ResourceRecordSetRegion = "ap-southeast-6"
+	ResourceRecordSetRegionEuscDeEast1  ResourceRecordSetRegion = "eusc-de-east-1"
 )
 
 // Values returns all known values for ResourceRecordSetRegion. Note that this can
@@ -462,6 +498,7 @@ func (ResourceRecordSetRegion) Values() []ResourceRecordSetRegion {
 		"us-gov-west-1",
 		"ap-east-2",
 		"ap-southeast-6",
+		"eusc-de-east-1",
 	}
 }
 
@@ -624,6 +661,8 @@ const (
 	VPCRegionApEast2      VPCRegion = "ap-east-2"
 	VPCRegionEuIsoeWest1  VPCRegion = "eu-isoe-west-1"
 	VPCRegionApSoutheast6 VPCRegion = "ap-southeast-6"
+	VPCRegionUsIsobWest1  VPCRegion = "us-isob-west-1"
+	VPCRegionEuscDeEast1  VPCRegion = "eusc-de-east-1"
 )
 
 // Values returns all known values for VPCRegion. Note that this can be expanded
@@ -676,5 +715,7 @@ func (VPCRegion) Values() []VPCRegion {
 		"ap-east-2",
 		"eu-isoe-west-1",
 		"ap-southeast-6",
+		"us-isob-west-1",
+		"eusc-de-east-1",
 	}
 }

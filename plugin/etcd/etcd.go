@@ -45,7 +45,7 @@ type Etcd struct {
 }
 
 // Services implements the ServiceBackend interface.
-func (e *Etcd) Services(ctx context.Context, state request.Request, exact bool, opt plugin.Options) (services []msg.Service, err error) {
+func (e *Etcd) Services(ctx context.Context, state request.Request, exact bool, _opt plugin.Options) (services []msg.Service, err error) {
 	services, err = e.Records(ctx, state, exact)
 	if err != nil {
 		return
@@ -190,7 +190,7 @@ func (e *Etcd) TTL(kv *mvccpb.KeyValue, serv *msg.Service) uint32 {
 				leaseTTL = maxTTL64
 			}
 
-			etcdTTL = uint32(leaseTTL)
+			etcdTTL = uint32(leaseTTL) // #nosec G115 -- leaseTTL is bounded by minTTL64/maxTTL64
 		}
 	}
 

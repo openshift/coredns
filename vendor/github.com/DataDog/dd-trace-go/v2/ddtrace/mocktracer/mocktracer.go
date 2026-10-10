@@ -113,7 +113,8 @@ func (t *mocktracer) FinishSpan(s *tracer.Span) {
 
 // Stop deactivates the mock tracer and sets the active tracer to a no-op.
 func (t *mocktracer) Stop() {
-	tracer.Stop()
+	// N.b.: The main reason for this call is to make TestTracerStop pass.
+	internal.SetGlobalTracer(tracer.Tracer(&tracer.NoopTracer{}))
 	t.dsmProcessor.Stop()
 }
 
@@ -191,13 +192,13 @@ const (
 	baggagePrefix  = tracer.DefaultBaggageHeaderPrefix
 )
 
-func (t *mocktracer) Extract(carrier interface{}) (*tracer.SpanContext, error) {
+func (t *mocktracer) Extract(carrier any) (*tracer.SpanContext, error) {
 	return tracer.NewPropagator(&tracer.PropagatorConfig{
 		MaxTagsHeaderLen: 512,
 	}).Extract(carrier)
 }
 
-func (t *mocktracer) Inject(context *tracer.SpanContext, carrier interface{}) error {
+func (t *mocktracer) Inject(context *tracer.SpanContext, carrier any) error {
 	return tracer.NewPropagator(&tracer.PropagatorConfig{
 		MaxTagsHeaderLen: 512,
 	}).Inject(context, carrier)

@@ -288,25 +288,25 @@ func (external) EpIndexReverse(string) []*object.Endpoints { return nil }
 func (external) SvcIndexReverse(string) []*object.Service  { return nil }
 func (external) Modified(kubernetes.ModifiedMode) int64    { return 0 }
 
-func (external) SvcImportIndex(s string) []*object.ServiceImport                    { return nil }
-func (external) ServiceImportList() []*object.ServiceImport                         { return nil }
-func (external) McEpIndex(s string) []*object.MultiClusterEndpoints                 { return nil }
-func (external) MultiClusterEndpointsList(s string) []*object.MultiClusterEndpoints { return nil }
+func (external) SvcImportIndex(_s string) []*object.ServiceImport                    { return nil }
+func (external) ServiceImportList() []*object.ServiceImport                          { return nil }
+func (external) McEpIndex(_s string) []*object.MultiClusterEndpoints                 { return nil }
+func (external) MultiClusterEndpointsList(_s string) []*object.MultiClusterEndpoints { return nil }
 
 func (external) EpIndex(s string) []*object.Endpoints {
 	return epIndexExternal[s]
 }
 
 func (external) EndpointsList() []*object.Endpoints {
-	var eps []*object.Endpoints
+	eps := make([]*object.Endpoints, 0, len(epIndexExternal))
 	for _, ep := range epIndexExternal {
 		eps = append(eps, ep...)
 	}
 	return eps
 }
-func (external) GetNodeByName(ctx context.Context, name string) (*api.Node, error) { return nil, nil }
-func (external) SvcIndex(s string) []*object.Service                               { return svcIndexExternal[s] }
-func (external) PodIndex(string) []*object.Pod                                     { return nil }
+func (external) GetNodeByName(_ctx context.Context, _name string) (*api.Node, error) { return nil, nil }
+func (external) SvcIndex(s string) []*object.Service                                 { return svcIndexExternal[s] }
+func (external) PodIndex(string) []*object.Pod                                       { return nil }
 
 func (external) SvcExtIndexReverse(ip string) (result []*object.Service) {
 	for _, svcs := range svcIndexExternal {
@@ -416,14 +416,14 @@ var svcIndexExternal = map[string][]*object.Service{
 }
 
 func (external) ServiceList() []*object.Service {
-	var svcs []*object.Service
+	svcs := make([]*object.Service, 0, len(svcIndexExternal))
 	for _, svc := range svcIndexExternal {
 		svcs = append(svcs, svc...)
 	}
 	return svcs
 }
 
-func externalAddress(state request.Request, headless bool) []dns.RR {
+func externalAddress(_state request.Request, _headless bool) []dns.RR {
 	a := test.A("example.org. IN A 127.0.0.1")
 	return []dns.RR{a}
 }

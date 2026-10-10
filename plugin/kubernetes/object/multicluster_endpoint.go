@@ -8,7 +8,7 @@ import (
 	mcs "sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 )
 
-// Endpoints is a stripped down api.Endpoints with only the items we need for CoreDNS.
+// MultiClusterEndpoints is a stripped down api.Endpoints with only the items we need for CoreDNS.
 type MultiClusterEndpoints struct {
 	Endpoints
 	ClusterId string
@@ -18,7 +18,7 @@ type MultiClusterEndpoints struct {
 // MultiClusterEndpointsKey returns a string using for the index.
 func MultiClusterEndpointsKey(name, namespace string) string { return name + "." + namespace }
 
-// EndpointSliceToEndpoints converts a *discovery.EndpointSlice to a *Endpoints.
+// EndpointSliceToMultiClusterEndpoints converts a *discovery.EndpointSlice to a *Endpoints.
 func EndpointSliceToMultiClusterEndpoints(obj meta.Object) (meta.Object, error) {
 	labels := maps.Clone(obj.GetLabels())
 	ends, err := EndpointSliceToEndpoints(obj)
@@ -49,16 +49,16 @@ func (e *MultiClusterEndpoints) DeepCopyObject() runtime.Object {
 func (e *MultiClusterEndpoints) GetNamespace() string { return e.Endpoints.GetNamespace() }
 
 // SetNamespace implements the metav1.Object interface.
-func (e *MultiClusterEndpoints) SetNamespace(namespace string) {}
+func (e *MultiClusterEndpoints) SetNamespace(_namespace string) {}
 
 // GetName implements the metav1.Object interface.
 func (e *MultiClusterEndpoints) GetName() string { return e.Endpoints.GetName() }
 
 // SetName implements the metav1.Object interface.
-func (e *MultiClusterEndpoints) SetName(name string) {}
+func (e *MultiClusterEndpoints) SetName(_name string) {}
 
 // GetResourceVersion implements the metav1.Object interface.
 func (e *MultiClusterEndpoints) GetResourceVersion() string { return e.Endpoints.GetResourceVersion() }
 
 // SetResourceVersion implements the metav1.Object interface.
-func (e *MultiClusterEndpoints) SetResourceVersion(version string) {}
+func (e *MultiClusterEndpoints) SetResourceVersion(_version string) {}

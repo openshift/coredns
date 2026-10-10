@@ -10,12 +10,54 @@ import (
 
 	"github.com/DataDog/dd-trace-go/v2/instrumentation/options"
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	illmobs "github.com/DataDog/dd-trace-go/v2/internal/llmobs"
+	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/orchestrion"
 )
 
 // ContextWithSpan returns a copy of the given context which includes the span s.
+// If ctx is nil, a new background context is created to avoid panicking.
 func ContextWithSpan(ctx context.Context, s *Span) context.Context {
-	return orchestrion.CtxWithValue(ctx, internal.ActiveSpanKey, s)
+	if ctx == nil {
+		log.Warn("ContextWithSpan: received nil context, falling back to context.Background()")
+		ctx = context.Background()
+	}
+	newCtx := orchestrion.CtxWithValue(ctx, internal.ActiveSpanKey, s)
+	return contextWithPropagatedLLMSpan(newCtx, s)
+}
+
+func contextWithPropagatedLLMSpan(ctx context.Context, s *Span) context.Context {
+	if s == nil {
+		return ctx
+	}
+	// if there is a propagated llm span already just skip
+	if _, ok := illmobs.PropagatedLLMSpanFromContext(ctx); ok {
+		return ctx
+	}
+	propagatedLLMObs := propagatedLLMSpanFromTags(s)
+	if propagatedLLMObs.SpanID == "" || propagatedLLMObs.TraceID == "" {
+		return ctx
+	}
+	return illmobs.ContextWithPropagatedLLMSpan(ctx, propagatedLLMObs)
+}
+
+// propagatedLLMSpanFromTags extracts LLMObs propagation information from the trace propagating tags.
+// This is used during distributed tracing to set the correct parent span for the current span.
+func propagatedLLMSpanFromTags(s *Span) *illmobs.PropagatedLLMSpan {
+	propagatedLLMObs := &illmobs.PropagatedLLMSpan{}
+	if s.context == nil || s.context.trace == nil {
+		return propagatedLLMObs
+	}
+	if parentID := s.context.trace.propagatingTag(keyPropagatedLLMObsParentID); parentID != "" {
+		propagatedLLMObs.SpanID = parentID
+	}
+	if mlApp := s.context.trace.propagatingTag(keyPropagatedLLMObsMLAPP); mlApp != "" {
+		propagatedLLMObs.MLApp = mlApp
+	}
+	if trID := s.context.trace.propagatingTag(keyPropagatedLLMObsTraceID); trID != "" {
+		propagatedLLMObs.TraceID = trID
+	}
+	return propagatedLLMObs
 }
 
 // SpanFromContext returns the span contained in the given context. A second return
@@ -28,9 +70,12 @@ func SpanFromContext(ctx context.Context) (*Span, bool) {
 	v := orchestrion.WrapContext(ctx).Value(internal.ActiveSpanKey)
 	if s, ok := v.(*Span); ok {
 		// We may have a nil *Span wrapped in an interface in the GLS context stack,
-		// in which case we need to act a if there was nothing (for else we'll
+		// in which case we need to act as if there was nothing (otherwise we'll
 		// forcefully un-do a [ChildOf] option if one was passed).
-		return s, s != nil
+		if s == nil {
+			return nil, false
+		}
+		return s, true
 	}
 	return nil, false
 }
@@ -38,6 +83,7 @@ func SpanFromContext(ctx context.Context) (*Span, bool) {
 // StartSpanFromContext returns a new span with the given operation name and options. If a span
 // is found in the context, it will be used as the parent of the resulting span. If the ChildOf
 // option is passed, it will only be used as the parent if there is no span found in `ctx`.
+// +checklocksignore — Initialization time, span just created by StartSpan, not yet shared.
 func StartSpanFromContext(ctx context.Context, operationName string, opts ...StartSpanOption) (*Span, context.Context) {
 	// copy opts in case the caller reuses the slice in parallel
 	// we will add at least 1, at most 2 items
