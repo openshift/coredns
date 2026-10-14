@@ -13,6 +13,10 @@ import (
 	"github.com/miekg/dns"
 )
 
+// maxRegexpLen is a hard limit on the length of a regex pattern to prevent
+// OOM during regex compilation with malicious input.
+const maxRegexpLen = 10000
+
 // stringRewriter rewrites a string
 type stringRewriter interface {
 	rewriteString(src string) string
@@ -81,8 +85,8 @@ func newSuffixStringRewriter(orig, replacement string) stringRewriter {
 }
 
 func (r *suffixStringRewriter) rewriteString(src string) string {
-	if strings.HasSuffix(src, r.suffix) {
-		return strings.TrimSuffix(src, r.suffix) + r.replacement
+	if before, ok := strings.CutSuffix(src, r.suffix); ok {
+		return before + r.replacement
 	}
 	return src
 }
@@ -92,7 +96,7 @@ type nameRewriterResponseRule struct {
 	stringRewriter
 }
 
-func (r *nameRewriterResponseRule) RewriteResponse(res *dns.Msg, rr dns.RR) {
+func (r *nameRewriterResponseRule) RewriteResponse(_res *dns.Msg, rr dns.RR) {
 	rr.Header().Name = r.rewriteString(rr.Header().Name)
 }
 
@@ -101,7 +105,7 @@ type valueRewriterResponseRule struct {
 	stringRewriter
 }
 
-func (r *valueRewriterResponseRule) RewriteResponse(res *dns.Msg, rr dns.RR) {
+func (r *valueRewriterResponseRule) RewriteResponse(_res *dns.Msg, rr dns.RR) {
 	value := getRecordValueForRewrite(rr)
 	if value != "" {
 		new := r.rewriteString(value)
@@ -157,10 +161,11 @@ func (rule *nameRuleBase) responseRuleFor(state request.Request) (ResponseRules,
 	}
 
 	rewriter := newRemapStringRewriter(state.Req.Question[0].Name, state.Name())
-	rules := ResponseRules{
+	rules := make(ResponseRules, 0, 2+len(rule.static))
+	rules = append(rules,
 		&nameRewriterResponseRule{rewriter},
 		&valueRewriterResponseRule{rewriter},
-	}
+	)
 	return append(rules, rule.static...), RewriteDone
 }
 
@@ -181,7 +186,7 @@ func newExactNameRule(nextAction string, orig, replacement string, answers Respo
 	}
 }
 
-func (rule *exactNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+func (rule *exactNameRule) Rewrite(_ctx context.Context, state request.Request) (ResponseRules, Result) {
 	if rule.from == state.Name() {
 		state.Req.Question[0].Name = rule.replacement
 		return rule.responseRuleFor(state)
@@ -202,7 +207,7 @@ func newPrefixNameRule(nextAction string, auto bool, prefix, replacement string,
 	}
 }
 
-func (rule *prefixNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+func (rule *prefixNameRule) Rewrite(_ctx context.Context, state request.Request) (ResponseRules, Result) {
 	if after, ok := strings.CutPrefix(state.Name(), rule.prefix); ok {
 		state.Req.Question[0].Name = rule.replacement + after
 		return rule.responseRuleFor(state)
@@ -217,15 +222,16 @@ type suffixNameRule struct {
 }
 
 func newSuffixNameRule(nextAction string, auto bool, suffix, replacement string, answers ResponseRules) Rule {
-	var rules ResponseRules
+	rules := make(ResponseRules, 0, len(answers))
 	if auto {
 		// for a suffix rewriter better standard response rewrites can be done
 		// just by using the original suffix/replacement in the opposite order
 		rewriter := newSuffixStringRewriter(replacement, suffix)
-		rules = ResponseRules{
+		rules = make(ResponseRules, 0, 2+len(answers))
+		rules = append(rules,
 			&nameRewriterResponseRule{rewriter},
 			&valueRewriterResponseRule{rewriter},
-		}
+		)
 	}
 	return &suffixNameRule{
 		newNameRuleBase(nextAction, false, replacement, append(rules, answers...)),
@@ -233,9 +239,9 @@ func newSuffixNameRule(nextAction string, auto bool, suffix, replacement string,
 	}
 }
 
-func (rule *suffixNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
-	if strings.HasSuffix(state.Name(), rule.suffix) {
-		state.Req.Question[0].Name = strings.TrimSuffix(state.Name(), rule.suffix) + rule.replacement
+func (rule *suffixNameRule) Rewrite(_ctx context.Context, state request.Request) (ResponseRules, Result) {
+	if before, ok := strings.CutSuffix(state.Name(), rule.suffix); ok {
+		state.Req.Question[0].Name = before + rule.replacement
 		return rule.responseRuleFor(state)
 	}
 	return nil, RewriteIgnored
@@ -255,7 +261,7 @@ func newSubstringNameRule(nextAction string, auto bool, substring, replacement s
 	}
 }
 
-func (rule *substringNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+func (rule *substringNameRule) Rewrite(_ctx context.Context, state request.Request) (ResponseRules, Result) {
 	if strings.Contains(state.Name(), rule.substring) {
 		state.Req.Question[0].Name = strings.ReplaceAll(state.Name(), rule.substring, rule.replacement)
 		return rule.responseRuleFor(state)
@@ -277,7 +283,7 @@ func newRegexNameRule(nextAction string, auto bool, pattern *regexp.Regexp, repl
 	}
 }
 
-func (rule *regexNameRule) Rewrite(ctx context.Context, state request.Request) (ResponseRules, Result) {
+func (rule *regexNameRule) Rewrite(_ctx context.Context, state request.Request) (ResponseRules, Result) {
 	regexGroups := rule.pattern.FindStringSubmatch(state.Name())
 	if len(regexGroups) == 0 {
 		return nil, RewriteIgnored
@@ -365,10 +371,7 @@ func parseAnswerRules(name string, args []string) (auto bool, rules ResponseRule
 	}
 	for arg < len(args) {
 		if last == "" && args[arg] != AnswerMatch {
-			if last == "" {
-				return false, nil, fmt.Errorf("exceeded the number of arguments for a non-answer rule argument for %s rule", name)
-			}
-			return false, nil, fmt.Errorf("exceeded the number of arguments for %s answer rule for %s rule", last, name)
+			return false, nil, fmt.Errorf("exceeded the number of arguments for a non-answer rule argument for %s rule", name)
 		}
 		if args[arg] == AnswerMatch {
 			arg++
@@ -438,6 +441,9 @@ func getSubExprUsage(s string) int {
 
 // isValidRegexPattern returns a regular expression for pattern matching or errors, if any.
 func isValidRegexPattern(rewriteFrom, rewriteTo string) (*regexp.Regexp, error) {
+	if len(rewriteFrom) > maxRegexpLen {
+		return nil, fmt.Errorf("regex pattern too long: %d > %d", len(rewriteFrom), maxRegexpLen)
+	}
 	rewriteFromPattern, err := regexp.Compile(rewriteFrom)
 	if err != nil {
 		return nil, fmt.Errorf("invalid regex matching pattern: %s", rewriteFrom)

@@ -72,7 +72,12 @@ func (s *ServiceImport) DeepCopyObject() runtime.Object {
 		Ports:      make([]mcs.ServicePort, len(s.Ports)),
 	}
 	copy(s1.ClusterIPs, s.ClusterIPs)
-	copy(s1.Ports, s.Ports)
+	// mcs.ServicePort holds an AppProtocol *string, so copying the slice elementwise
+	// would leave both imports pointing at the same string. Use the generated deep
+	// copy so the copy owns everything it can reach.
+	for i := range s.Ports {
+		s.Ports[i].DeepCopyInto(&s1.Ports[i])
+	}
 	return s1
 }
 
@@ -80,16 +85,16 @@ func (s *ServiceImport) DeepCopyObject() runtime.Object {
 func (s *ServiceImport) GetNamespace() string { return s.Namespace }
 
 // SetNamespace implements the metav1.Object interface.
-func (s *ServiceImport) SetNamespace(namespace string) {}
+func (s *ServiceImport) SetNamespace(_namespace string) {}
 
 // GetName implements the metav1.Object interface.
 func (s *ServiceImport) GetName() string { return s.Name }
 
 // SetName implements the metav1.Object interface.
-func (s *ServiceImport) SetName(name string) {}
+func (s *ServiceImport) SetName(_name string) {}
 
 // GetResourceVersion implements the metav1.Object interface.
 func (s *ServiceImport) GetResourceVersion() string { return s.Version }
 
 // SetResourceVersion implements the metav1.Object interface.
-func (s *ServiceImport) SetResourceVersion(version string) {}
+func (s *ServiceImport) SetResourceVersion(_version string) {}

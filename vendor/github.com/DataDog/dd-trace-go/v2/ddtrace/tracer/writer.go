@@ -18,6 +18,7 @@ import (
 	"time"
 
 	globalinternal "github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/locking"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 )
 
@@ -36,8 +37,11 @@ type agentTraceWriter struct {
 	// config holds the tracer configuration
 	config *config
 
+	// mu synchronizes access to payload operations
+	mu locking.Mutex
+
 	// payload encodes and buffers traces in msgpack format
-	payload *payload
+	payload payload // +checklocks:mu
 
 	// climit limits the number of concurrent outgoing connections
 	climit chan struct{}
@@ -52,26 +56,36 @@ type agentTraceWriter struct {
 	// statsd is used to send metrics
 	statsd globalinternal.StatsdClient
 
-	tracesQueued uint32
+	tracesQueued uint32 // +checkatomic
 }
 
 func newAgentTraceWriter(c *config, s *prioritySampler, statsdClient globalinternal.StatsdClient) *agentTraceWriter {
-	return &agentTraceWriter{
+	tw := &agentTraceWriter{
 		config:           c,
-		payload:          newPayload(),
 		climit:           make(chan struct{}, concurrentConnectionLimit),
 		prioritySampling: s,
 		statsd:           statsdClient,
 	}
+	tw.payload = tw.newPayload()
+	return tw
 }
 
 func (h *agentTraceWriter) add(trace []*Span) {
-	if err := h.payload.push(trace); err != nil {
+	h.mu.Lock()
+	stats, err := h.payload.push(trace)
+	if err != nil {
+		h.mu.Unlock()
 		h.statsd.Incr("datadog.tracer.traces_dropped", []string{"reason:encoding_error"}, 1)
 		log.Error("Error encoding msgpack: %s", err.Error())
+		return
 	}
-	atomic.AddUint32(&h.tracesQueued, 1) // TODO: This does not differentiate between complete traces and partial chunks
-	if h.payload.size() > payloadSizeLimit {
+	// TODO: This does not differentiate between complete traces and partial chunks
+	atomic.AddUint32(&h.tracesQueued, 1)
+
+	needsFlush := stats.size > payloadSizeLimit
+	h.mu.Unlock()
+
+	if needsFlush {
 		h.statsd.Incr("datadog.tracer.flush_triggered", []string{"reason:size"}, 1)
 		h.flush()
 	}
@@ -83,40 +97,53 @@ func (h *agentTraceWriter) stop() {
 	h.wg.Wait()
 }
 
+// newPayload returns a new payload based on the trace protocol.
+func (h *agentTraceWriter) newPayload() payload {
+	return newPayload(h.config.internalConfig.TraceProtocol())
+}
+
 // flush will push any currently buffered traces to the server.
 func (h *agentTraceWriter) flush() {
-	if h.payload.itemCount() == 0 {
+	h.mu.Lock()
+	oldp := h.payload
+	// Check after acquiring lock
+	if oldp.itemCount() == 0 {
+		h.mu.Unlock()
 		return
 	}
-	h.wg.Add(1)
+	h.payload = h.newPayload()
+	h.mu.Unlock()
+
 	h.climit <- struct{}{}
-	oldp := h.payload
-	h.payload = newPayload()
-	go func(p *payload) {
+	h.wg.Add(1)
+	go func(p payload) {
 		defer func(start time.Time) {
 			// Once the payload has been used, clear the buffer for garbage
 			// collection to avoid a memory leak when references to this object
 			// may still be kept by faulty transport implementations or the
 			// standard library. See dd-trace-go#976
 			h.statsd.Count("datadog.tracer.queue.enqueued.traces", int64(atomic.SwapUint32(&h.tracesQueued, 0)), nil, 1)
-			p.clear()
-
+			if p.protocol() == traceProtocolV1 {
+				sp := p.(*safePayload)
+				putPayloadV1(sp.p.(*payloadV1))
+			} else {
+				p.clear()
+			}
 			<-h.climit
 			h.statsd.Timing("datadog.tracer.flush_duration", time.Since(start), nil, 1)
 			h.wg.Done()
 		}(time.Now())
 
-		var count, size int
+		stats := p.stats()
 		var err error
 		for attempt := 0; attempt <= h.config.sendRetries; attempt++ {
-			size, count = p.size(), p.itemCount()
-			log.Debug("Attempt to send payload: size: %d traces: %d\n", size, count)
+			log.Debug("Attempt to send payload: size: %d traces: %d\n", stats.size, stats.itemCount)
 			var rc io.ReadCloser
-			rc, err = h.config.transport.send(p)
+			rc, err = h.config.ddTransport.send(p)
 			if err == nil {
 				log.Debug("sent traces after %d attempts", attempt+1)
-				h.statsd.Count("datadog.tracer.flush_bytes", int64(size), nil, 1)
-				h.statsd.Count("datadog.tracer.flush_traces", int64(count), nil, 1)
+				h.statsd.Count("datadog.tracer.flush_bytes", int64(stats.size), nil, 1)
+				h.statsd.Count("datadog.tracer.flush_traces", int64(stats.itemCount), nil, 1)
 				if err := h.prioritySampling.readRatesJSON(rc); err != nil {
 					h.statsd.Incr("datadog.tracer.decode_error", nil, 1)
 				}
@@ -127,10 +154,10 @@ func (h *agentTraceWriter) flush() {
 				log.Error("failure sending traces (attempt %d of %d): %v", attempt+1, h.config.sendRetries+1, err.Error())
 			}
 			p.reset()
-			time.Sleep(h.config.retryInterval)
+			time.Sleep(h.config.internalConfig.RetryInterval())
 		}
-		h.statsd.Count("datadog.tracer.traces_dropped", int64(count), []string{"reason:send_failed"}, 1)
-		log.Error("lost %d traces: %v", count, err.Error())
+		h.statsd.Count("datadog.tracer.traces_dropped", int64(stats.itemCount), []string{"reason:send_failed"}, 1)
+		log.Error("lost %d traces: %v", stats.itemCount, err.Error())
 	}(oldp)
 }
 
@@ -201,6 +228,7 @@ func encodeFloat(p []byte, f float64) []byte {
 	return p
 }
 
+// +checklocksignore — Post-finish: serializes finished span for log transport.
 func (h *logTraceWriter) encodeSpan(s *Span) {
 	var scratch [maxFloatLength]byte
 	h.buf.WriteString(`{"trace_id":"`)

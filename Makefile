@@ -4,10 +4,15 @@ BINARY:=coredns
 SYSTEM:=
 CHECKS:=check
 BUILDOPTS?=-v
+GOTAGS?=grpcnotrace
 GOPATH?=$(HOME)/go
 MAKEPWD:=$(dir $(realpath $(firstword $(MAKEFILE_LIST))))
 CGO_ENABLED?=0
 GOLANG_VERSION ?= $(shell cat .go-version)
+STRIP_FLAGS?=-s -w
+LDFLAGS?=-ldflags="$(STRIP_FLAGS) -X github.com/coredns/coredns/coremain.GitCommit=$(GITCOMMIT)"
+
+.SHELLFLAGS := -e -c
 
 export GOSUMDB = sum.golang.org
 export GOTOOLCHAIN = local
@@ -17,7 +22,7 @@ all: coredns
 
 .PHONY: coredns
 coredns: $(CHECKS)
-	CGO_ENABLED=$(CGO_ENABLED) $(SYSTEM) go build $(BUILDOPTS) -ldflags="-s -w -X github.com/coredns/coredns/coremain.GitCommit=$(GITCOMMIT)" -o $(BINARY)
+	CGO_ENABLED=$(CGO_ENABLED) $(SYSTEM) go build $(BUILDOPTS) -tags="$(GOTAGS)" $(LDFLAGS) -o $(BINARY)
 
 .PHONY: check
 check: core/plugin/zplugin.go core/dnsserver/zdirectives.go
@@ -39,13 +44,6 @@ pb:
 clean:
 	go clean
 	rm -f coredns
-
-.PHONY: dep-ensure
-dep-ensure:
-	dep version || go get -u github.com/golang/dep/cmd/dep
-	dep ensure -v
-	dep prune -v
-	find vendor -name '*_test.go' -delete
 
 .PHONY: test
 test: check
