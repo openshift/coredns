@@ -1,0 +1,10 @@
+export GOTOOLCHAIN = local
+
+.PHONY: generate-plugins verify-plugins
+generate-plugins:
+	go run ./internal/openshiftplugins -mode=prune
+	COREDNS_PLUGINS= go generate coredns.go
+	go mod tidy
+
+verify-plugins:
+	go run ./internal/openshiftplugins -mode=verify
