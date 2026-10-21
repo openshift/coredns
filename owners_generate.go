@@ -14,6 +14,16 @@ import (
 )
 
 func main() {
+	info, err := os.Lstat("plugin/chaos")
+	if os.IsNotExist(err) {
+		return
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	if !info.IsDir() {
+		log.Fatal("plugin/chaos must be a directory")
+	}
 	// top-level OWNERS file
 	o, err := owners("CODEOWNERS")
 	if err != nil {
