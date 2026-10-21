@@ -1,7 +1,7 @@
 FROM registry.ci.openshift.org/ocp/builder:rhel-9-golang-1.26-openshift-5.0 AS builder
 WORKDIR /go/src/github.com/coredns/coredns
 COPY . .
-RUN GO111MODULE=on GOFLAGS=-mod=vendor go build -o coredns .
+RUN make -f Makefile.ocp verify-plugins && GO111MODULE=on GOFLAGS=-mod=vendor go build -o coredns .
 
 FROM registry.ci.openshift.org/ocp/5.0:base-rhel9
 COPY --from=builder /go/src/github.com/coredns/coredns/coredns /usr/bin/
