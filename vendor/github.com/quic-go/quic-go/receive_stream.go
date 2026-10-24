@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/quic-go/quic-go/internal/ackhandler"
-	"github.com/quic-go/quic-go/internal/flowcontrol"
 	"github.com/quic-go/quic-go/internal/monotime"
 	"github.com/quic-go/quic-go/internal/protocol"
 	"github.com/quic-go/quic-go/internal/qerr"
@@ -22,8 +21,9 @@ type ReceiveStream struct {
 
 	sender streamSender
 
-	frameQueue  *frameSorter
-	finalOffset protocol.ByteCount
+	frameQueue               *frameSorter
+	finalOffset              protocol.ByteCount
+	receiveFinalSizeCallback func(int64)
 
 	currentFrame       []byte
 	currentFrameDone   func()
@@ -49,7 +49,7 @@ type ReceiveStream struct {
 	readOnce chan struct{} // cap: 1, to protect against concurrent use of Read
 	deadline monotime.Time
 
-	flowController flowcontrol.StreamFlowController
+	flowController *streamFlowController
 }
 
 var (
@@ -60,7 +60,7 @@ var (
 func newReceiveStream(
 	streamID protocol.StreamID,
 	sender streamSender,
-	flowController flowcontrol.StreamFlowController,
+	flowController *streamFlowController,
 ) *ReceiveStream {
 	return &ReceiveStream{
 		streamID:       streamID,
@@ -74,8 +74,37 @@ func newReceiveStream(
 }
 
 // StreamID returns the stream ID.
-func (s *ReceiveStream) StreamID() protocol.StreamID {
+func (s *ReceiveStream) StreamID() StreamID {
 	return s.streamID
+}
+
+// SetReceiveFinalSizeCallback sets a callback that is called when the receive stream's final size is known.
+// The final size is learned from a FIN or RESET_STREAM frame.
+// Most applications don't need this. It is mainly useful for protocol layers
+// that need exact stream final sizes, such as WebTransport flow control accounting.
+// If the final size is already known, the callback is called before this method returns.
+// When the final size is learned later, the callback is called from the connection's event loop and must not block.
+// The callback is not called if the connection is closed before the final size is known.
+// Setting a nil callback removes it if the final size is not yet known.
+func (s *ReceiveStream) SetReceiveFinalSizeCallback(callback func(int64)) {
+	s.mutex.Lock()
+	size := s.finalOffset
+
+	// final size is already known
+	if size != protocol.MaxByteCount {
+		s.mutex.Unlock()
+		if callback != nil {
+			callback(int64(size))
+		}
+		return
+	}
+
+	if s.closeForShutdownErr != nil {
+		s.mutex.Unlock()
+		return
+	}
+	s.receiveFinalSizeCallback = callback
+	s.mutex.Unlock()
 }
 
 // Read reads data from the stream.
@@ -131,7 +160,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 		s.errorRead = true
 		return false, false, 0, io.EOF
 	}
-	if s.cancelledLocally || (s.cancelledRemotely && s.readPos >= s.reliableSize) {
+	if s.cancelledLocally || s.isRemoteCancellationEffective() {
 		s.errorRead = true
 		return false, false, 0, s.cancelErr
 	}
@@ -154,22 +183,14 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			if s.closeForShutdownErr != nil {
 				return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.closeForShutdownErr
 			}
-			if s.cancelledLocally || (s.cancelledRemotely && s.readPos >= s.reliableSize) {
+			if s.cancelledLocally || s.isRemoteCancellationEffective() {
 				s.errorRead = true
 				return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.cancelErr
 			}
 
 			deadline := s.deadline
-			if !deadline.IsZero() {
-				if !monotime.Now().Before(deadline) {
-					return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, errDeadline
-				}
-				if deadlineTimer == nil {
-					deadlineTimer = time.NewTimer(monotime.Until(deadline))
-					defer deadlineTimer.Stop()
-				} else {
-					deadlineTimer.Reset(monotime.Until(deadline))
-				}
+			if !deadline.IsZero() && !monotime.Now().Before(deadline) {
+				return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, errDeadline
 			}
 
 			if s.currentFrame != nil || s.currentFrameIsLast {
@@ -180,15 +201,19 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			if deadline.IsZero() {
 				<-s.readChan
 			} else {
+				if deadlineTimer == nil {
+					deadlineTimer = time.NewTimer(monotime.Until(deadline))
+					defer deadlineTimer.Stop()
+				} else {
+					deadlineTimer.Reset(monotime.Until(deadline))
+				}
 				select {
 				case <-s.readChan:
 				case <-deadlineTimer.C:
 				}
 			}
 			s.mutex.Lock()
-			if s.currentFrame == nil {
-				s.dequeueNextFrame()
-			}
+			s.dequeueNextFrame()
 		}
 
 		if bytesRead > len(p) {
@@ -201,7 +226,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 
 		// when a RESET_STREAM was received, the flow controller was already
 		// informed about the final offset for this stream
-		if !s.cancelledRemotely || s.readPos < s.reliableSize {
+		if !s.isRemoteCancellationEffective() {
 			hasStream, hasConn := s.flowController.AddBytesRead(protocol.ByteCount(m))
 			if hasStream {
 				s.queuedMaxStreamData = true
@@ -216,7 +241,7 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 		s.readPos += protocol.ByteCount(m)
 		bytesRead += m
 
-		if s.cancelledRemotely && s.readPos >= s.reliableSize {
+		if s.isRemoteCancellationEffective() {
 			s.flowController.Abandon()
 		}
 
@@ -229,11 +254,132 @@ func (s *ReceiveStream) readImpl(p []byte) (hasStreamWindowUpdate bool, hasConnW
 			return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, io.EOF
 		}
 	}
-	if s.cancelledRemotely && s.readPos >= s.reliableSize {
+	if s.isRemoteCancellationEffective() {
 		s.errorRead = true
 		return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, s.cancelErr
 	}
 	return hasStreamWindowUpdate, hasConnWindowUpdate, bytesRead, nil
+}
+
+// isRemoteCancellationEffective returns whether the stream was cancelled remotely
+// and all reliable data has been read.
+func (s *ReceiveStream) isRemoteCancellationEffective() bool {
+	return s.cancelledRemotely && s.readPos >= s.reliableSize
+}
+
+// Peek fills b with stream data, without consuming the stream data.
+// It blocks until len(b) bytes are available, or an error occurs.
+// It respects the stream deadline set by SetReadDeadline.
+// If the stream ends before len(b) bytes are available,
+// it returns the number of bytes peeked along with io.EOF.
+func (s *ReceiveStream) Peek(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+
+	// prevent concurrent use with Read
+	s.readOnce <- struct{}{}
+	defer func() { <-s.readOnce }()
+
+	return s.peekImpl(b)
+}
+
+func (s *ReceiveStream) peekImpl(b []byte) (int, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	var deadlineTimer *time.Timer
+
+	for {
+		if s.currentFrameIsLast && s.currentFrame == nil {
+			return 0, io.EOF
+		}
+		if s.cancelledLocally || s.isRemoteCancellationEffective() {
+			return 0, s.cancelErr
+		}
+		if s.closeForShutdownErr != nil {
+			return 0, s.closeForShutdownErr
+		}
+
+		deadline := s.deadline
+		if !deadline.IsZero() && !monotime.Now().Before(deadline) {
+			return 0, errDeadline
+		}
+
+		if s.currentFrame == nil || s.readPosInFrame >= len(s.currentFrame) {
+			s.dequeueNextFrame()
+		}
+
+		if s.currentFrame != nil && s.readPosInFrame < len(s.currentFrame) {
+			availableInCurrentFrame := len(s.currentFrame) - s.readPosInFrame
+
+			if availableInCurrentFrame >= len(b) {
+				copy(b, s.currentFrame[s.readPosInFrame:])
+				return len(b), nil
+			}
+
+			offset := s.readPos + protocol.ByteCount(availableInCurrentFrame)
+			// First peek, then copy.
+			// This avoids copying data if there's not enough data in the queue.
+			if err := s.frameQueue.Peek(offset, b[availableInCurrentFrame:]); err == nil {
+				copy(b[:availableInCurrentFrame], s.currentFrame[s.readPosInFrame:])
+				return len(b), nil
+			}
+
+			if s.currentFrameIsLast {
+				copy(b[:availableInCurrentFrame], s.currentFrame[s.readPosInFrame:])
+				return availableInCurrentFrame, io.EOF
+			}
+
+			// If the stream was remotely cancelled and the request extends beyond the reliable size,
+			// return the data available with the cancel error (once it's all received).
+			if s.cancelledRemotely && s.readPos+protocol.ByteCount(len(b)) > s.reliableSize {
+				total := int(s.reliableSize - s.readPos)
+				needed := total - availableInCurrentFrame
+				// only return once all available data is contiguous
+				if needed <= 0 || s.frameQueue.Peek(offset, b[availableInCurrentFrame:total]) == nil {
+					copy(b[:availableInCurrentFrame], s.currentFrame[s.readPosInFrame:])
+					return total, s.cancelErr
+				}
+			}
+
+			// If the request extends beyond the stream's final offset,
+			// return the data available with EOF (once it's all received).
+			if s.readPos+protocol.ByteCount(len(b)) > s.finalOffset {
+				total := int(s.finalOffset - s.readPos)
+				needed := total - availableInCurrentFrame
+				// only return once all available data is contiguous
+				if needed <= 0 || s.frameQueue.Peek(offset, b[availableInCurrentFrame:total]) == nil {
+					copy(b[:availableInCurrentFrame], s.currentFrame[s.readPosInFrame:])
+					return total, io.EOF
+				}
+			}
+		}
+
+		if s.currentFrameIsLast || s.readPos >= s.finalOffset {
+			return 0, io.EOF
+		}
+
+		s.mutex.Unlock()
+		if deadline.IsZero() {
+			<-s.readChan
+		} else {
+			if deadlineTimer == nil {
+				deadlineTimer = time.NewTimer(monotime.Until(deadline))
+				defer deadlineTimer.Stop()
+			} else {
+				deadlineTimer.Reset(monotime.Until(deadline))
+			}
+			select {
+			case <-s.readChan:
+			case <-deadlineTimer.C:
+			}
+		}
+		s.mutex.Lock()
+		if s.currentFrame == nil || s.readPosInFrame >= len(s.currentFrame) {
+			s.dequeueNextFrame()
+		}
+	}
 }
 
 func (s *ReceiveStream) dequeueNextFrame() {
@@ -287,16 +433,23 @@ func (s *ReceiveStream) handleStreamFrame(frame *wire.StreamFrame, now monotime.
 	s.mutex.Lock()
 	err := s.handleStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
+	size, callback := s.takeReceiveFinalSizeCallback()
 	s.mutex.Unlock()
 
 	if completed {
 		s.flowController.Abandon()
 		s.sender.onStreamCompleted(s.streamID)
 	}
+	if callback != nil {
+		callback(size)
+	}
 	return err
 }
 
 func (s *ReceiveStream) handleStreamFrameImpl(frame *wire.StreamFrame, now monotime.Time) error {
+	if s.closeForShutdownErr != nil {
+		return nil
+	}
 	maxOffset := frame.Offset + frame.DataLen()
 	if err := s.flowController.UpdateHighestReceived(maxOffset, frame.Fin, now); err != nil {
 		return err
@@ -318,10 +471,14 @@ func (s *ReceiveStream) handleResetStreamFrame(frame *wire.ResetStreamFrame, now
 	s.mutex.Lock()
 	err := s.handleResetStreamFrameImpl(frame, now)
 	completed := s.isNewlyCompleted()
+	size, callback := s.takeReceiveFinalSizeCallback()
 	s.mutex.Unlock()
 
 	if completed {
 		s.sender.onStreamCompleted(s.streamID)
+	}
+	if callback != nil {
+		callback(size)
 	}
 	return err
 }
@@ -356,6 +513,15 @@ func (s *ReceiveStream) handleResetStreamFrameImpl(frame *wire.ResetStreamFrame,
 	s.cancelErr = &StreamError{StreamID: s.streamID, ErrorCode: frame.ErrorCode, Remote: true}
 	s.signalRead()
 	return nil
+}
+
+func (s *ReceiveStream) takeReceiveFinalSizeCallback() (int64, func(int64)) {
+	if s.finalOffset == protocol.MaxByteCount {
+		return 0, nil
+	}
+	callback := s.receiveFinalSizeCallback
+	s.receiveFinalSizeCallback = nil
+	return int64(s.finalOffset), callback
 }
 
 func (s *ReceiveStream) getControlFrame(now monotime.Time) (_ ackhandler.Frame, ok, hasMore bool) {
@@ -398,6 +564,7 @@ func (s *ReceiveStream) SetReadDeadline(t time.Time) error {
 func (s *ReceiveStream) closeForShutdown(err error) {
 	s.mutex.Lock()
 	s.closeForShutdownErr = err
+	s.receiveFinalSizeCallback = nil
 	s.mutex.Unlock()
 	s.signalRead()
 }

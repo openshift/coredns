@@ -21,6 +21,9 @@ func TestHandler(t *testing.T) {
 }
 
 func TestHandlers(t *testing.T) {
+	previousDirectives := Directives
+	Directives = []string{"local"}
+	t.Cleanup(func() { Directives = previousDirectives })
 	tp := testPlugin{}
 	c := testConfig("dns", tp)
 	if _, err := NewServer("127.0.0.1:53", []*Config{c}); err != nil {
@@ -134,6 +137,19 @@ func TestInspectServerBlocks(t *testing.T) {
 			name: "simple dns",
 			serverBlocks: []caddyfile.ServerBlock{
 				{Keys: []string{"example.org"}},
+			},
+			expectedServerBlocks: []caddyfile.ServerBlock{
+				{Keys: []string{"dns://example.org.:53"}},
+			},
+			expectedConfigsLen: 1,
+			expectedZoneAddrs: map[string]zoneAddr{
+				"dns://example.org.:53": {Zone: "example.org.", Port: "53", Transport: "dns"},
+			},
+		},
+		{
+			name: "uppercase dns",
+			serverBlocks: []caddyfile.ServerBlock{
+				{Keys: []string{"EXAMPLE.ORG"}},
 			},
 			expectedServerBlocks: []caddyfile.ServerBlock{
 				{Keys: []string{"dns://example.org.:53"}},

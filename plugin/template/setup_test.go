@@ -1,6 +1,8 @@
 package template
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/coredns/caddy"
@@ -196,5 +198,21 @@ func TestSetupParse(t *testing.T) {
 		} else if err != nil && !test.shouldErr {
 			t.Fatalf("Test %d expected no errors, but got '%v'", i, err)
 		}
+	}
+}
+
+func TestSetupParseLargeRegex(t *testing.T) {
+	largeRegex := strings.Repeat("a", maxRegexpLen+1)
+	config := fmt.Sprintf(`template ANY A example.com {
+		match %s
+	}`, largeRegex)
+
+	c := caddy.NewTestController("dns", config)
+	_, err := templateParse(c)
+	if err == nil {
+		t.Fatal("Expected error for large regex, got nil")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("Expected 'too long' error, got: %v", err)
 	}
 }
