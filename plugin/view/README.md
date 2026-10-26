@@ -25,6 +25,15 @@ view NAME {
 
 For expression syntax and examples, see the Expressions and Examples sections.
 
+## Server Block Ordering
+
+Server blocks sharing the same zone and port are evaluated **top to bottom**. The first block whose
+view expression matches (or that has no view) handles the query. An unfiltered catch-all block
+declared *before* a filtered block will shadow it, because the catch-all matches every query.
+
+To get the expected split-DNS behavior, declare all filtered (view) blocks first and the unfiltered
+catch-all block last.
+
 ## Examples
 
 Implement CIDR based split DNS routing.  This will return a different
@@ -111,7 +120,7 @@ For example, an expression could look like:
 
 All expressions should be written to evaluate to a boolean value.
 
-See https://github.com/expr-lang/expr/blob/master/docs/Language-Definition.md as a detailed reference for valid syntax.
+See https://github.com/expr-lang/expr/blob/master/docs/language-definition.md as a detailed reference for valid syntax.
 
 ### Available Expression Functions
 

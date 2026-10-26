@@ -29,10 +29,10 @@ func setup(c *caddy.Controller) error {
 		if t == nil {
 			return nil
 		}
-		f.transfer = t.(*transfer.Transfer) // if found this must be OK.
+		f.Xfer = t.(*transfer.Transfer) // if found this must be OK.
 		go func() {
 			for _, n := range zones.Names {
-				f.transfer.Notify(n)
+				f.Xfer.Notify(n)
 			}
 		}()
 		return nil
@@ -45,7 +45,7 @@ func setup(c *caddy.Controller) error {
 		}
 		go func() {
 			for _, n := range zones.Names {
-				f.transfer.Notify(n)
+				f.Xfer.Notify(n)
 			}
 		}()
 		return nil
@@ -55,7 +55,7 @@ func setup(c *caddy.Controller) error {
 		z := zones.Z[n]
 		c.OnShutdown(z.OnShutdown)
 		c.OnStartup(func() error {
-			z.StartupOnce.Do(func() { z.Reload(f.transfer) })
+			z.StartupOnce.Do(func() { z.Reload(f.Xfer) })
 			return nil
 		})
 	}
@@ -77,6 +77,7 @@ func fileParse(c *caddy.Controller) (Zones, fall.F, error) {
 
 	var openErr error
 	reload := 1 * time.Minute
+	reload_by_mtime := false
 
 	for c.Next() {
 		// file db.file [zones...]
@@ -131,6 +132,8 @@ func fileParse(c *caddy.Controller) (Zones, fall.F, error) {
 					return Zones{}, fall, plugin.Error("file", err)
 				}
 				reload = d
+			case "reload_by_mtime":
+				reload_by_mtime = true
 			case "upstream":
 				// remove soon
 				c.RemainingArgs()
@@ -143,6 +146,7 @@ func fileParse(c *caddy.Controller) (Zones, fall.F, error) {
 		for i := range origins {
 			z[origins[i]].ReloadInterval = reload
 			z[origins[i]].Upstream = upstream.New()
+			z[origins[i]].ReloadByMtime = reload_by_mtime
 		}
 	}
 

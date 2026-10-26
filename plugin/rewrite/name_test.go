@@ -368,3 +368,14 @@ func TestNewNameRule(t *testing.T) {
 		t.Fatalf("Test %d: FAIL, expected fail=%t, but received fail=%t: (%s) %s, rule=%v", i, tc.expectedFail, failed, tc.next, tc.args, rule)
 	}
 }
+
+func TestNewNameRuleLargeRegex(t *testing.T) {
+	largeRegex := strings.Repeat("a", maxRegexpLen+1)
+	_, err := newNameRule("stop", "regex", largeRegex, "replacement")
+	if err == nil {
+		t.Fatal("Expected error for large regex, got nil")
+	}
+	if !strings.Contains(err.Error(), "too long") {
+		t.Errorf("Expected 'too long' error, got: %v", err)
+	}
+}
