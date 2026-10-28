@@ -1,8 +1,0 @@
-.vscode
-*.out
-*.test
-*.mmdb
-*.prof
-*.pprof
-*.svg
-*.tar.gz
