@@ -207,6 +207,11 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 				return nil, c.ArgErr()
 			}
 			k8s.opts.initEndpointsCache = false
+		case "zonal":
+			if len(c.RemainingArgs()) != 0 {
+				return nil, c.ArgErr()
+			}
+			k8s.opts.zonal = true
 		case "ignore":
 			args := c.RemainingArgs()
 			if len(args) > 0 {
@@ -237,13 +242,51 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 			args := c.RemainingArgs()
 			if len(args) == 0 {
 				return nil, c.ArgErr()
-			} else {
-				var err error
-				k8s.startupTimeout, err = time.ParseDuration(args[0])
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse startup_timeout: %v, %s", args[0], err)
-				}
 			}
+			var err error
+			k8s.startupTimeout, err = time.ParseDuration(args[0])
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse startup_timeout: %v, %s", args[0], err)
+			}
+		case "apiserver_qps":
+			args := c.RemainingArgs()
+			if len(args) != 1 {
+				return nil, c.ArgErr()
+			}
+			qps, err := strconv.ParseFloat(args[0], 32)
+			if err != nil {
+				return nil, c.Errf("invalid apiserver_qps %q: %v", args[0], err)
+			}
+			if qps < 0 {
+				return nil, c.Errf("apiserver_qps must be >= 0")
+			}
+			k8s.apiQPS = float32(qps)
+		case "apiserver_burst":
+			args := c.RemainingArgs()
+			if len(args) != 1 {
+				return nil, c.ArgErr()
+			}
+			burst, err := strconv.Atoi(args[0])
+			if err != nil {
+				return nil, c.Errf("invalid apiserver_burst %q: %v", args[0], err)
+			}
+			if burst < 0 {
+				return nil, c.Errf("apiserver_burst must be >= 0")
+			}
+			k8s.apiBurst = burst
+		case "apiserver_max_inflight":
+			args := c.RemainingArgs()
+			if len(args) != 1 {
+				return nil, c.ArgErr()
+			}
+			max, err := strconv.Atoi(args[0])
+			if err != nil {
+				return nil, c.Errf("invalid apiserver_max_inflight %q: %v", args[0], err)
+			}
+			if max < 0 {
+				return nil, c.Errf("apiserver_max_inflight must be >= 0")
+			}
+			k8s.apiMaxInflight = max
 		default:
 			return nil, c.Errf("unknown property '%s'", c.Val())
 		}
@@ -255,9 +298,15 @@ func ParseStanza(c *caddy.Controller) (*Kubernetes, error) {
 
 	for _, multiclusterZone := range k8s.opts.multiclusterZones {
 		if !slices.Contains(k8s.Zones, multiclusterZone) {
-			fmt.Println(k8s.Zones)
-			return nil, c.Errf("is not authoritative for the multicluster zone %s", multiclusterZone)
+			return nil, c.Errf("is not authoritative for the multicluster zone %s (authoritative zones: %v)", multiclusterZone, k8s.Zones)
 		}
+	}
+
+	if k8s.opts.zonal && !k8s.opts.initEndpointsCache {
+		// Zone-scoped names are answered from the endpoint cache;
+		// without it every zonal name would contradict the documented
+		// noendpoints behavior (NXDOMAIN for all headless queries).
+		return nil, c.Errf("zonal requires the endpoint cache; remove noendpoints")
 	}
 
 	return k8s, nil

@@ -64,10 +64,11 @@ func (w *ciVisibilityTraceWriter) add(trace []*Span) {
 	telemetry.EventsEnqueueForSerialization()
 	for _, s := range trace {
 		cvEvent := getCiVisibilityEvent(s)
-		if err := w.payload.push(cvEvent); err != nil {
+		size, err := w.payload.push(cvEvent)
+		if err != nil {
 			log.Error("ciVisibilityTraceWriter: Error encoding msgpack: %s", err.Error())
 		}
-		if w.payload.size() > agentlessPayloadSizeLimit {
+		if size > agentlessPayloadSizeLimit {
 			w.flush()
 		}
 	}
@@ -82,7 +83,7 @@ func (w *ciVisibilityTraceWriter) stop() {
 // flush sends the current payload to the transport. It ensures that the payload is reset
 // and the resources are freed after the flush operation is completed.
 func (w *ciVisibilityTraceWriter) flush() {
-	if w.payload.itemCount() == 0 {
+	if w.payload.stats().itemCount == 0 {
 		return
 	}
 
@@ -107,22 +108,23 @@ func (w *ciVisibilityTraceWriter) flush() {
 		var err error
 
 		requestCompressedType := telemetry.UncompressedRequestCompressedType
-		if ciTransport, ok := w.config.transport.(*ciVisibilityTransport); ok && ciTransport.agentless {
+		if ciTransport, ok := w.config.ddTransport.(*ciVisibilityTransport); ok && ciTransport.agentless {
 			requestCompressedType = telemetry.CompressedRequestCompressedType
 		}
 		telemetry.EndpointPayloadRequests(telemetry.TestCycleEndpointType, requestCompressedType)
 
 		for attempt := 0; attempt <= w.config.sendRetries; attempt++ {
-			size, count = p.size(), p.itemCount()
+			stats := p.stats()
+			size, count = stats.size, stats.itemCount
 			log.Debug("ciVisibilityTraceWriter: sending payload: size: %d events: %d\n", size, count)
-			_, err = w.config.transport.send(p.payload)
+			_, err = w.config.ddTransport.send(p.payload)
 			if err == nil {
 				log.Debug("ciVisibilityTraceWriter: sent events after %d attempts", attempt+1)
 				return
 			}
 			log.Error("ciVisibilityTraceWriter: failure sending events (attempt %d of %d): %v", attempt+1, w.config.sendRetries+1, err.Error())
 			p.reset()
-			time.Sleep(w.config.retryInterval)
+			time.Sleep(w.config.internalConfig.RetryInterval())
 		}
 		log.Error("ciVisibilityTraceWriter: lost %d events: %v", count, err.Error())
 		telemetry.EndpointPayloadDropped(telemetry.TestCycleEndpointType)

@@ -1,12 +1,14 @@
 package kubernetes
 
 import (
+	"net"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/coredns/caddy"
+	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin/pkg/fall"
 
 	meta "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -728,6 +730,158 @@ func TestKubernetesParseMulticluster(t *testing.T) {
 		foundMulticlusterZones := k8sController.opts.multiclusterZones
 		if !slices.Equal(foundMulticlusterZones, test.expectedMulticlusterZones) {
 			t.Errorf("Test %d: Expected kubernetes controller to be initialized with multicluster '%v'. Instead found multicluster '%v' for input '%s'", i, test.expectedMulticlusterZones, foundMulticlusterZones, test.input)
+		}
+	}
+}
+
+func TestKubernetesParseAPIRateLimiting(t *testing.T) {
+	tests := []struct {
+		input              string
+		shouldErr          bool
+		expectedErrContent string
+		expectedQPS        float32
+		expectedBurst      int
+		expectedMaxInf     int
+	}{
+		{
+			`kubernetes coredns.local {
+	apiserver_qps 50.0
+	apiserver_burst 100
+	apiserver_max_inflight 25
+}`,
+			false, "", 50.0, 100, 25,
+		},
+		{
+			`kubernetes coredns.local {
+	apiserver_qps -10
+}`, true, "apiserver_qps must be >= 0", 0, 0, 0},
+		{
+			`kubernetes coredns.local {
+	apiserver_burst -5
+}`, true, "apiserver_burst must be >= 0", 0, 0, 0},
+		{
+			`kubernetes coredns.local {
+	apiserver_max_inflight -1
+}`, true, "apiserver_max_inflight must be >= 0", 0, 0, 0},
+	}
+
+	for i, test := range tests {
+		c := caddy.NewTestController("dns", test.input)
+		k8s, err := kubernetesParse(c)
+
+		if test.shouldErr && err == nil {
+			t.Errorf("Test %d: Expected error but got none for input '%s'", i, test.input)
+			continue
+		}
+		if !test.shouldErr && err != nil {
+			t.Errorf("Test %d: Expected no error but got: %v", i, err)
+			continue
+		}
+		if err != nil {
+			if !strings.Contains(err.Error(), test.expectedErrContent) {
+				t.Errorf("Test %d: Expected error to contain '%s', got: %v", i, test.expectedErrContent, err)
+			}
+			continue
+		}
+
+		if k8s.apiQPS != test.expectedQPS {
+			t.Errorf("Test %d: Expected apiQPS=%v, got %v", i, test.expectedQPS, k8s.apiQPS)
+		}
+		if k8s.apiBurst != test.expectedBurst {
+			t.Errorf("Test %d: Expected apiBurst=%v, got %v", i, test.expectedBurst, k8s.apiBurst)
+		}
+		if k8s.apiMaxInflight != test.expectedMaxInf {
+			t.Errorf("Test %d: Expected apiMaxInflight=%v, got %v", i, test.expectedMaxInf, k8s.apiMaxInflight)
+		}
+	}
+}
+
+func TestBoundIPs(t *testing.T) {
+	tests := []struct {
+		name        string
+		listenHosts []string
+		expectIP    net.IP
+	}{
+		{"nil ListenHosts", nil, nil},
+		{"empty slice ListenHosts", []string{}, nil},
+		{"single empty string", []string{""}, nil},
+		{"valid CIDR address", []string{"192.168.1.1/24"}, net.ParseIP("192.168.1.1")},
+		{"loopback filtered", []string{"127.0.0.1/8"}, nil},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := caddy.NewTestController("dns", "kubernetes cluster.local")
+			cfg := dnsserver.GetConfig(c)
+			cfg.ListenHosts = tc.listenHosts
+
+			ips := boundIPs(c)
+
+			if tc.expectIP == nil {
+				return
+			}
+			for _, ip := range ips {
+				if ip.Equal(tc.expectIP) {
+					return
+				}
+			}
+			t.Errorf("expected %v in result, got %v", tc.expectIP, ips)
+		})
+	}
+}
+
+func TestKubernetesParseZonal(t *testing.T) {
+	tests := []struct {
+		input         string
+		shouldErr     bool
+		expectedZonal bool
+	}{
+		{
+			`kubernetes coredns.local {
+	zonal
+}`,
+			false,
+			true,
+		},
+		{
+			`kubernetes coredns.local {
+	zonal us-west-2a
+}`,
+			true,
+			false,
+		},
+		{
+			`kubernetes coredns.local {
+	zonal
+	noendpoints
+}`,
+			true,
+			false,
+		},
+		{
+			`kubernetes coredns.local {
+}`,
+			false,
+			false,
+		},
+	}
+
+	for i, test := range tests {
+		c := caddy.NewTestController("dns", test.input)
+		k8sController, err := kubernetesParse(c)
+
+		if test.shouldErr {
+			if err == nil {
+				t.Errorf("Test %d: Expected error, got none for input '%s'", i, test.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("Test %d: Expected no error, got '%v' for input '%s'", i, err, test.input)
+			continue
+		}
+		if k8sController.opts.zonal != test.expectedZonal {
+			t.Errorf("Test %d: Expected zonal=%v, got %v", i, test.expectedZonal, k8sController.opts.zonal)
 		}
 	}
 }

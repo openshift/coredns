@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"runtime"
 	"strings"
 	"time"
@@ -19,8 +18,10 @@ import (
 	pb "github.com/DataDog/datadog-agent/pkg/proto/pbgo/trace"
 
 	"github.com/DataDog/dd-trace-go/v2/internal"
+	"github.com/DataDog/dd-trace-go/v2/internal/bazel"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/constants"
 	"github.com/DataDog/dd-trace-go/v2/internal/civisibility/utils/telemetry"
+	"github.com/DataDog/dd-trace-go/v2/internal/env"
 	"github.com/DataDog/dd-trace-go/v2/internal/log"
 	"github.com/DataDog/dd-trace-go/v2/internal/urlsanitizer"
 	"github.com/DataDog/dd-trace-go/v2/internal/version"
@@ -33,8 +34,8 @@ const (
 	EvpProxyPath       = "evp_proxy/v2"       // Path for EVP proxy.
 )
 
-// Ensure that civisibilityTransport implements the transport interface.
-var _ transport = (*ciVisibilityTransport)(nil)
+// Ensure that ciVisibilityTransport implements the ddTransport interface.
+var _ ddTransport = (*ciVisibilityTransport)(nil)
 
 // ciVisibilityTransport is a structure that handles sending CI Visibility payloads
 // to the Datadog endpoint, either in agentless mode or through the EVP proxy.
@@ -78,7 +79,7 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 	testCycleURL := ""
 	if agentlessEnabled {
 		// Agentless mode is enabled.
-		APIKeyValue := os.Getenv(constants.APIKeyEnvironmentVariable)
+		APIKeyValue := env.Get(constants.APIKeyEnvironmentVariable)
 		if APIKeyValue == "" {
 			log.Error("An API key is required for agentless mode. Use the DD_API_KEY env variable to set it")
 		}
@@ -87,14 +88,14 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 
 		// Check for a custom agentless URL.
 		agentlessURL := ""
-		if v := os.Getenv(constants.CIVisibilityAgentlessURLEnvironmentVariable); v != "" {
+		if v := env.Get(constants.CIVisibilityAgentlessURLEnvironmentVariable); v != "" {
 			agentlessURL = v
 		}
 
 		if agentlessURL == "" {
 			// Use the standard agentless URL format.
 			site := "datadoghq.com"
-			if v := os.Getenv("DD_SITE"); v != "" {
+			if v := env.Get("DD_SITE"); v != "" {
 				site = v
 			}
 
@@ -106,7 +107,7 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 	} else {
 		// Use agent mode with the EVP proxy.
 		defaultHeaders["X-Datadog-EVP-Subdomain"] = TestCycleSubdomain
-		testCycleURL = fmt.Sprintf("%s/%s/%s", config.agentURL.String(), EvpProxyPath, TestCyclePath)
+		testCycleURL = fmt.Sprintf("%s/%s/%s", config.internalConfig.AgentURL().String(), EvpProxyPath, TestCyclePath)
 	}
 	log.Debug("ciVisibilityTransport: creating transport instance [agentless: %t, testcycleurl: %s]", agentlessEnabled, urlsanitizer.SanitizeURL(testCycleURL))
 
@@ -128,12 +129,26 @@ func newCiVisibilityTransport(config *config) *ciVisibilityTransport {
 // Returns:
 //
 //	An io.ReadCloser for reading the response body, and an error if the operation fails.
-func (t *ciVisibilityTransport) send(p *payload) (body io.ReadCloser, err error) {
-	ciVisibilityPayload := &ciVisibilityPayload{p, 0}
+func (t *ciVisibilityTransport) send(p payload) (body io.ReadCloser, err error) {
+	ciVisibilityPayload := &ciVisibilityPayload{payload: p, serializationTime: 0}
 	buffer, bufferErr := ciVisibilityPayload.getBuffer(t.config)
 	if bufferErr != nil {
 		return nil, fmt.Errorf("cannot create buffer payload: %v", bufferErr)
 	}
+
+	if bazel.IsPayloadFilesModeEnabled() {
+		log.Debug("civisibility: test event payload transport mode is file; converting msgpack payload to JSON before writing to disk")
+		jsonPayload, err := bazel.MsgpackToJSON(buffer.Bytes())
+		if err != nil {
+			return nil, fmt.Errorf("cannot convert payload to json: %w", err)
+		}
+		if err := bazel.WritePayloadFile(bazel.PayloadKindTests, jsonPayload); err != nil {
+			return nil, fmt.Errorf("cannot write test payload file: %w", err)
+		}
+		return http.NoBody, nil
+	}
+
+	log.Debug("civisibility: test event payload transport mode is http; sending payload to %s", urlsanitizer.SanitizeURL(t.testCycleURLPath))
 
 	if t.agentless {
 		// Compress payload
