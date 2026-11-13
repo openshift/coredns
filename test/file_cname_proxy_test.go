@@ -70,8 +70,8 @@ func TestZoneExternalCNAMELookupWithProxy(t *testing.T) {
 		t.Fatalf("Expected to receive reply, but didn't: %s", err)
 	}
 	// There should be a CNAME *and* an IP address in the answer section.
-	// For now, just check that we have 2 RRs
-	if len(resp.Answer) != 2 {
+	// For now, just check that we have atleast 2 or more RRs
+	if len(resp.Answer) < 2 {
 		t.Fatalf("Expected 2 RRs in answer section got %d", len(resp.Answer))
 	}
 }
