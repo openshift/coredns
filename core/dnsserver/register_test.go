@@ -21,6 +21,9 @@ func TestHandler(t *testing.T) {
 }
 
 func TestHandlers(t *testing.T) {
+	previousDirectives := Directives
+	Directives = []string{"local"}
+	t.Cleanup(func() { Directives = previousDirectives })
 	tp := testPlugin{}
 	c := testConfig("dns", tp)
 	if _, err := NewServer("127.0.0.1:53", []*Config{c}); err != nil {

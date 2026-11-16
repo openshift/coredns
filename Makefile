@@ -25,16 +25,15 @@ coredns: $(CHECKS)
 	CGO_ENABLED=$(CGO_ENABLED) $(SYSTEM) go build $(BUILDOPTS) -tags="$(GOTAGS)" $(LDFLAGS) -o $(BINARY)
 
 .PHONY: check
-check: core/plugin/zplugin.go core/dnsserver/zdirectives.go
+check:
+	$(MAKE) -f Makefile.ocp verify-plugins
 
 core/plugin/zplugin.go core/dnsserver/zdirectives.go: plugin.cfg
-	go generate coredns.go
-	go get
+	$(MAKE) -f Makefile.ocp generate-plugins
 
 .PHONY: gen
 gen:
-	go generate coredns.go
-	go get
+	$(MAKE) -f Makefile.ocp generate-plugins
 
 .PHONY: pb
 pb:

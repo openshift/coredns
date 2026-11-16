@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/coredns/caddy"
+	"github.com/coredns/caddy/caddyfile"
 	"github.com/coredns/coredns/core/dnsserver"
 )
 
@@ -82,12 +83,28 @@ func TestReadme(t *testing.T) {
 
 		// Test each snippet.
 		for _, in := range inputs {
-			dnsserver.Port = strconv.Itoa(port)
-			server, err := caddy.Start(in)
-			if err != nil {
-				t.Errorf("Failed to start server with %s, for input %q:\n%s", readme, err, in.Body())
-			}
-			server.Stop()
+			t.Run(d.Name()+"/"+strconv.Itoa(port), func(t *testing.T) {
+				requireOpenShiftCorefile(t, string(in.Body()))
+				blocks, err := caddyfile.Parse(in.Path(), strings.NewReader(string(in.Body())), nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(blocks) == 0 {
+					t.Log("parsed snippet-only example; no server block to start")
+					return
+				}
+				dnsserver.Port = strconv.Itoa(port)
+				server, err := caddy.Start(in)
+				if err != nil {
+					t.Fatalf("Failed to start server with %s, for input %q:\n%s", readme, err, in.Body())
+				}
+				for _, err := range server.ShutdownCallbacks() {
+					t.Error(err)
+				}
+				if err := server.Stop(); err != nil {
+					t.Error(err)
+				}
+			})
 			port++
 		}
 	}

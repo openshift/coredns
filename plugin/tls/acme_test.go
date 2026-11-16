@@ -77,8 +77,16 @@ func TestACMEDirectiveOrder(t *testing.T) {
 	for i, directive := range dnsserver.Directives {
 		indexes[directive] = i
 	}
-	if indexes["tls"] != indexes["dnssec"]+1 {
-		t.Fatalf("tls directive index = %d, want immediately after dnssec at %d", indexes["tls"], indexes["dnssec"])
+	tlsIndex, enabled := indexes["tls"]
+	if !enabled {
+		t.Fatal("tls directive is not enabled")
+	}
+	if dnssecIndex, enabled := indexes["dnssec"]; enabled {
+		if tlsIndex != dnssecIndex+1 {
+			t.Fatalf("tls directive index = %d, want immediately after dnssec at %d", tlsIndex, dnssecIndex)
+		}
+	} else if templateIndex, enabled := indexes["template"]; !enabled || templateIndex != tlsIndex+1 {
+		t.Fatalf("tls directive index = %d, want immediately before enabled template at %d", tlsIndex, templateIndex)
 	}
 }
 
